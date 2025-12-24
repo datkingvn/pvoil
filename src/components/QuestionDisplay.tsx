@@ -9,7 +9,7 @@ interface QuestionDisplayProps {
 }
 
 export function QuestionDisplay({ hideQAType = false }: QuestionDisplayProps = {}) {
-  const { currentQuestion, gameStatus, currentRound, khoiDongActivePlayerId, khoiDongStarted } = useGameStore();
+  const { currentQuestion, gameStatus, currentRound, khoiDongActiveTeamId, khoiDongStarted } = useGameStore();
 
   const getStatusText = (status: GameStatus) => {
     switch (status) {
@@ -47,12 +47,12 @@ export function QuestionDisplay({ hideQAType = false }: QuestionDisplayProps = {
           >
             <div className="text-center">
               <div className="text-4xl font-bold text-neon-blue mb-4">
-                {currentRound === "khoi-dong" && !khoiDongActivePlayerId
+                {currentRound === "khoi-dong" && !khoiDongActiveTeamId
                   ? "Chờ MC chọn đội"
                   : getStatusText(gameStatus)}
               </div>
               <div className="text-gray-400 text-lg">
-                {currentRound === "khoi-dong" && !khoiDongActivePlayerId
+                {currentRound === "khoi-dong" && !khoiDongActiveTeamId
                   ? "Vui lòng chờ MC chọn đội thi..."
                   : "Vui lòng chờ..."}
               </div>

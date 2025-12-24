@@ -149,7 +149,8 @@ export const useGameStore = create<GameStore>()(
                 })),
               ];
               set({ khoiDongPackages: packages });
-              broadcastState({ khoiDongPackages: packages });
+              // Note: khoiDongPackages is not part of GameState, so we don't broadcast it
+              // Each tab should load questions independently when needed
             }
           } else {
             // Load questions for other rounds
@@ -168,7 +169,7 @@ export const useGameStore = create<GameStore>()(
               }));
               const updatedQuestions = { ...get().questions, [round]: mappedQuestions };
               set({ questions: updatedQuestions });
-              broadcastState({ questions: updatedQuestions });
+              // Questions are loaded per tab; no need to broadcast them via BroadcastChannel
             }
           }
         } catch (error) {
