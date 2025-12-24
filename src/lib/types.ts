@@ -1,7 +1,5 @@
 export type RoundType = "khoi-dong" | "vuot-chuong-ngai-vat" | "tang-toc" | "ve-dich";
 
-export type PlayerId = "A" | "B" | "C" | "D";
-
 export type GameStatus = "waiting" | "question-open" | "buzz-locked" | "answer-revealed";
 
 export interface Option {
@@ -20,11 +18,10 @@ export interface Question {
   isOpenEnded?: boolean; // true cho câu hỏi hỏi đáp
 }
 
-export interface Player {
-  id: PlayerId;
-  name: string;
+export interface TeamScore {
+  teamId: string;
+  teamName: string;
   score: number;
-  status: "ready" | "buzzed" | "answered" | "locked";
 }
 
 export interface LogEntry {
@@ -45,15 +42,17 @@ export interface GameState {
   timerRunning: boolean;
   timerInitial: number;
   
-  // Players
-  players: Player[];
-  selectedPlayerId: PlayerId | null;
+  // Teams (đội thi với điểm số)
+  teams: TeamScore[];
+  selectedTeamId: string | null;
   
   // Khởi động round specific
-  khoiDongActivePlayerId: PlayerId | null;
+  khoiDongActiveTeamId: string | null;
   khoiDongQuestionIndex: number;
   khoiDongAnsweredCount: number;
   khoiDongStarted: boolean;
+  khoiDongSelectedPackage: number | null; // 1, 2, 3, hoặc 4
+  khoiDongTeamPackages: Record<string, number>; // Lưu đội nào đã chọn gói nào (teamId -> packageNumber)
   
   // Settings
   soundEnabled: boolean;

@@ -1,72 +1,71 @@
 import { Question, RoundType } from "./types";
 
-export const questions: Record<RoundType, Question[]> = {
-  "khoi-dong": [
-    {
-      id: "kd-1",
-      text: "Thủ đô của Việt Nam là thành phố nào?",
-      points: 10,
-      timeLimitSec: 15,
-      round: "khoi-dong",
-      isOpenEnded: true,
-    },
-    {
-      id: "kd-2",
-      text: "Ngọn núi cao nhất Việt Nam là gì?",
-      points: 10,
-      timeLimitSec: 15,
-      round: "khoi-dong",
-      isOpenEnded: true,
-    },
-    {
-      id: "kd-3",
-      text: "Sông nào dài nhất Việt Nam?",
-      points: 10,
-      timeLimitSec: 15,
-      round: "khoi-dong",
-      isOpenEnded: true,
-    },
-    {
-      id: "kd-4",
-      text: "Năm 2024 là năm con gì theo âm lịch?",
-      points: 10,
-      timeLimitSec: 15,
-      round: "khoi-dong",
-      isOpenEnded: true,
-    },
-    {
-      id: "kd-5",
-      text: "Ai là tác giả của truyện 'Dế Mèn phiêu lưu ký'?",
-      points: 10,
-      timeLimitSec: 15,
-      round: "khoi-dong",
-      isOpenEnded: true,
-    },
-    {
-      id: "kd-6",
-      text: "Hành tinh nào gần Mặt Trời nhất?",
-      points: 10,
-      timeLimitSec: 15,
-      round: "khoi-dong",
-      isOpenEnded: true,
-    },
-    {
-      id: "kd-7",
-      text: "Số nguyên tố nhỏ nhất là số nào?",
-      points: 10,
-      timeLimitSec: 15,
-      round: "khoi-dong",
-      isOpenEnded: true,
-    },
-    {
-      id: "kd-8",
-      text: "Thành phố nào được mệnh danh là 'Thành phố Hoa'?",
-      points: 10,
-      timeLimitSec: 15,
-      round: "khoi-dong",
-      isOpenEnded: true,
-    },
+// 4 gói câu hỏi Khởi động, mỗi gói 12 câu
+export const khoiDongPackages: Question[][] = [
+  // Gói 1
+  [
+    { id: "kd-p1-1", text: "Thủ đô của Việt Nam là thành phố nào?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p1-2", text: "Ngọn núi cao nhất Việt Nam là gì?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p1-3", text: "Sông nào dài nhất Việt Nam?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p1-4", text: "Năm 2024 là năm con gì theo âm lịch?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p1-5", text: "Ai là tác giả của truyện 'Dế Mèn phiêu lưu ký'?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p1-6", text: "Hành tinh nào gần Mặt Trời nhất?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p1-7", text: "Số nguyên tố nhỏ nhất là số nào?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p1-8", text: "Thành phố nào được mệnh danh là 'Thành phố Hoa'?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p1-9", text: "Quốc gia nào có diện tích lớn nhất thế giới?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p1-10", text: "Ai là người đầu tiên đặt chân lên Mặt Trăng?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p1-11", text: "Nguyên tố hóa học nào có ký hiệu là 'Au'?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p1-12", text: "Tác phẩm 'Truyện Kiều' là của ai?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
   ],
+  // Gói 2
+  [
+    { id: "kd-p2-1", text: "Loài động vật nào lớn nhất trên Trái Đất?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p2-2", text: "Số Pi (π) xấp xỉ bằng bao nhiêu?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p2-3", text: "Thành phố nào được gọi là 'Thành phố không ngủ'?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p2-4", text: "Ngày Quốc khánh Việt Nam là ngày nào?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p2-5", text: "Cơ quan nào trong cơ thể người lớn nhất?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p2-6", text: "World Cup đầu tiên được tổ chức ở đâu?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p2-7", text: "Sông nào chảy qua nhiều quốc gia nhất?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p2-8", text: "Chiến thắng Điện Biên Phủ diễn ra vào năm nào?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p2-9", text: "Tốc độ ánh sáng trong chân không là bao nhiêu?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p2-10", text: "'Chí Phèo' là tác phẩm của nhà văn nào?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p2-11", text: "Công thức tính diện tích hình tròn là gì?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p2-12", text: "Thành phố cổ nào ở miền Trung nổi tiếng với phố cổ?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+  ],
+  // Gói 3
+  [
+    { id: "kd-p3-1", text: "Loài hoa nào là biểu tượng của Việt Nam, màu vàng, nở vào mùa thu?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p3-2", text: "Loại bánh truyền thống làm từ gạo nếp, có nhân đậu xanh là gì?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p3-3", text: "Loại nhạc cụ dây, có 4 dây, dùng để kéo là gì?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p3-4", text: "Môn thể thao dùng vợt và quả cầu lông là gì?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p3-5", text: "Loài động vật có vú sống dưới nước, rất thông minh là gì?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p3-6", text: "Loại cây trồng phổ biến ở Việt Nam, có màu xanh, dùng để nấu canh là gì?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p3-7", text: "Loại quả màu đỏ, có nhiều hạt, ăn rất ngọt là gì?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p3-8", text: "Tác phẩm 'Nhật ký trong tù' là của ai?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p3-9", text: "Hành tinh nào có vành đai nổi tiếng?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p3-10", text: "Ngọn núi cao nhất thế giới là gì?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p3-11", text: "Đại dương nào lớn nhất thế giới?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p3-12", text: "Thủ đô của Pháp là thành phố nào?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+  ],
+  // Gói 4
+  [
+    { id: "kd-p4-1", text: "Thủ đô của Nhật Bản là thành phố nào?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p4-2", text: "Kim tự tháp lớn nhất nằm ở đâu?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p4-3", text: "Quốc gia nào có dân số đông nhất thế giới?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p4-4", text: "Ngôn ngữ nào được nói nhiều nhất thế giới?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p4-5", text: "Tác phẩm 'Romeo và Juliet' là của ai?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p4-6", text: "Hệ mặt trời có bao nhiêu hành tinh?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p4-7", text: "Ngày nào được gọi là 'Ngày Trái Đất'?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p4-8", text: "Loài chim nào không biết bay nhưng bơi rất giỏi?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p4-9", text: "Thành phố nào được gọi là 'Thành phố ánh sáng'?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p4-10", text: "Nước nào có nhiều múi giờ nhất?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p4-11", text: "Loài động vật nào sống lâu nhất trên Trái Đất?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+    { id: "kd-p4-12", text: "Ngọn núi lửa cao nhất thế giới nằm ở đâu?", points: 10, timeLimitSec: 15, round: "khoi-dong", isOpenEnded: true },
+  ],
+];
+
+export const questions: Record<RoundType, Question[]> = {
+  "khoi-dong": [], // Không dùng nữa, dùng khoiDongPackages thay thế
   "vuot-chuong-ngai-vat": [
     {
       id: "vcnv-1",

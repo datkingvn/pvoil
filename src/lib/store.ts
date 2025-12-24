@@ -1,9 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { GameState, RoundType, PlayerId, Question, LogEntry } from "./types";
-import { questions } from "./questions";
+import { GameState, RoundType, Question, LogEntry, TeamScore } from "./types";
 
 interface GameStore extends GameState {
+  // Questions from database
+  questions: Record<RoundType, Question[]>;
+  khoiDongPackages: Question[][]; // 4 packages for khoi-dong
+  
   // Actions
   setRound: (round: RoundType | null) => void;
   selectQuestion: (questionId: string) => void;
@@ -15,27 +18,21 @@ interface GameStore extends GameState {
   timerPause: () => void;
   timerReset: () => void;
   timerTick: () => void;
-  buzz: (playerId: PlayerId) => void;
-  answer: (playerId: PlayerId, optionIndex: number) => void;
-  scoreAdd: (playerId: PlayerId, delta: number) => void;
-  scoreSet: (playerId: PlayerId, value: number) => void;
+  scoreAdd: (teamId: string, delta: number) => void;
+  scoreSet: (teamId: string, value: number) => void;
   toggleSound: () => void;
   toggleAmbience: () => void;
   resetGame: () => void;
   addLogEntry: (message: string) => void;
-  setSelectedPlayer: (playerId: PlayerId | null) => void;
+  setSelectedTeam: (teamId: string | null) => void;
+  loadTeams: () => Promise<void>;
+  loadQuestions: (round: RoundType) => Promise<void>;
   // Khởi động actions
-  setKhoiDongPlayer: (playerId: PlayerId | null) => void;
+  setKhoiDongTeam: (teamId: string | null) => void;
+  selectKhoiDongPackage: (packageNumber: number) => void;
   startKhoiDong: () => void;
   markKhoiDongAnswer: (isCorrect: boolean) => void;
 }
-
-const initialPlayers = [
-  { id: "A" as PlayerId, name: "Thí sinh A", score: 0, status: "ready" as const },
-  { id: "B" as PlayerId, name: "Thí sinh B", score: 0, status: "ready" as const },
-  { id: "C" as PlayerId, name: "Thí sinh C", score: 0, status: "ready" as const },
-  { id: "D" as PlayerId, name: "Thí sinh D", score: 0, status: "ready" as const },
-];
 
 const initialState: GameState = {
   currentRound: null,
@@ -45,15 +42,24 @@ const initialState: GameState = {
   timerSeconds: 0,
   timerRunning: false,
   timerInitial: 0,
-  players: initialPlayers,
-  selectedPlayerId: null,
-  khoiDongActivePlayerId: null,
+  teams: [],
+  selectedTeamId: null,
+  khoiDongActiveTeamId: null,
   khoiDongQuestionIndex: 0,
   khoiDongAnsweredCount: 0,
   khoiDongStarted: false,
+  khoiDongSelectedPackage: null,
+  khoiDongTeamPackages: {},
   soundEnabled: true,
   ambienceEnabled: false,
   log: [],
+};
+
+const initialQuestions: Record<RoundType, Question[]> = {
+  "khoi-dong": [],
+  "vuot-chuong-ngai-vat": [],
+  "tang-toc": [],
+  "ve-dich": [],
 };
 
 // BroadcastChannel for cross-tab sync
@@ -80,23 +86,115 @@ export const useGameStore = create<GameStore>()(
   persist(
     (set, get) => ({
       ...initialState,
+      questions: initialQuestions,
+      khoiDongPackages: [[], [], [], []],
+
+      loadTeams: async () => {
+        try {
+          const res = await fetch("/api/teams");
+          const data = await res.json();
+          if (res.ok && data.teams) {
+            const teamsWithScore: TeamScore[] = data.teams.map((team: any) => ({
+              teamId: team.id,
+              teamName: team.teamName,
+              score: 0,
+            }));
+            set({ teams: teamsWithScore });
+            broadcastState({ teams: teamsWithScore });
+          }
+        } catch (error) {
+          console.error("Error loading teams:", error);
+        }
+      },
+
+      loadQuestions: async (round: RoundType) => {
+        try {
+          if (round === "khoi-dong") {
+            // Load all packages for khoi-dong
+            const res = await fetch("/api/questions?round=khoi-dong");
+            const data = await res.json();
+            if (res.ok && data.packages) {
+              const packages: Question[][] = [
+                (data.packages[1] || []).map((q: any) => ({
+                  id: q.id,
+                  text: q.text,
+                  points: q.points,
+                  timeLimitSec: q.timeLimitSec,
+                  round: q.round,
+                  isOpenEnded: q.isOpenEnded,
+                })),
+                (data.packages[2] || []).map((q: any) => ({
+                  id: q.id,
+                  text: q.text,
+                  points: q.points,
+                  timeLimitSec: q.timeLimitSec,
+                  round: q.round,
+                  isOpenEnded: q.isOpenEnded,
+                })),
+                (data.packages[3] || []).map((q: any) => ({
+                  id: q.id,
+                  text: q.text,
+                  points: q.points,
+                  timeLimitSec: q.timeLimitSec,
+                  round: q.round,
+                  isOpenEnded: q.isOpenEnded,
+                })),
+                (data.packages[4] || []).map((q: any) => ({
+                  id: q.id,
+                  text: q.text,
+                  points: q.points,
+                  timeLimitSec: q.timeLimitSec,
+                  round: q.round,
+                  isOpenEnded: q.isOpenEnded,
+                })),
+              ];
+              set({ khoiDongPackages: packages });
+              broadcastState({ khoiDongPackages: packages });
+            }
+          } else {
+            // Load questions for other rounds
+            const res = await fetch(`/api/questions?round=${round}`);
+            const data = await res.json();
+            if (res.ok && data.questions) {
+              const mappedQuestions: Question[] = data.questions.map((q: any) => ({
+                id: q.id,
+                text: q.text,
+                options: q.options,
+                correctIndex: q.correctIndex,
+                points: q.points,
+                timeLimitSec: q.timeLimitSec,
+                round: q.round,
+                isOpenEnded: q.isOpenEnded,
+              }));
+              const updatedQuestions = { ...get().questions, [round]: mappedQuestions };
+              set({ questions: updatedQuestions });
+              broadcastState({ questions: updatedQuestions });
+            }
+          }
+        } catch (error) {
+          console.error("Error loading questions:", error);
+        }
+      },
 
       setRound: (round) => {
         set({
           currentRound: round,
           selectedQuestionId: null,
           currentQuestion: null,
-          khoiDongActivePlayerId: null,
+          khoiDongActiveTeamId: null,
           khoiDongQuestionIndex: 0,
           khoiDongAnsweredCount: 0,
           khoiDongStarted: false,
+          khoiDongSelectedPackage: null,
+          khoiDongTeamPackages: round === "khoi-dong" ? get().khoiDongTeamPackages : {},
         });
         broadcastState({
           currentRound: round,
-          khoiDongActivePlayerId: null,
+          khoiDongActiveTeamId: null,
           khoiDongQuestionIndex: 0,
           khoiDongAnsweredCount: 0,
           khoiDongStarted: false,
+          khoiDongSelectedPackage: null,
         });
       },
 
@@ -105,7 +203,16 @@ export const useGameStore = create<GameStore>()(
         const round = state.currentRound;
         if (!round) return;
 
-        const question = questions[round].find((q) => q.id === questionId);
+        let question: Question | undefined;
+        
+        if (round === "khoi-dong") {
+          // For khoi-dong, questions are in packages
+          // This is handled in startKhoiDong, so we don't need to handle it here
+          return;
+        } else {
+          question = state.questions[round]?.find((q) => q.id === questionId);
+        }
+
         if (question) {
           set({
             selectedQuestionId: questionId,
@@ -125,7 +232,6 @@ export const useGameStore = create<GameStore>()(
           gameStatus: "question-open",
           timerRunning: true,
           timerSeconds: state.currentQuestion.timeLimitSec,
-          players: state.players.map((p) => ({ ...p, status: "ready" as const })),
         });
         get().addLogEntry(`Mở câu hỏi: ${state.currentQuestion.text.substring(0, 30)}...`);
         broadcastState({ gameStatus: "question-open", timerRunning: true });
@@ -149,7 +255,6 @@ export const useGameStore = create<GameStore>()(
           currentQuestion: null,
           timerRunning: false,
           timerSeconds: 0,
-          players: get().players.map((p) => ({ ...p, status: "ready" as const })),
         });
         broadcastState({
           gameStatus: "waiting",
@@ -178,96 +283,57 @@ export const useGameStore = create<GameStore>()(
       timerTick: () => {
         const state = get();
         if (state.timerRunning && state.timerSeconds > 0) {
-          set({ timerSeconds: state.timerSeconds - 1 });
-          broadcastState({ timerSeconds: state.timerSeconds - 1 });
+          const newSeconds = state.timerSeconds - 1;
+          set({ timerSeconds: newSeconds });
+          broadcastState({ timerSeconds: newSeconds });
+          
+          // Nếu hết thời gian trong vòng khởi động, kết thúc vòng thi
+          if (newSeconds === 0 && state.currentRound === "khoi-dong" && state.khoiDongStarted && state.khoiDongActiveTeamId) {
+            const team = state.teams.find((t) => t.teamId === state.khoiDongActiveTeamId);
+            set({
+              timerRunning: false,
+              khoiDongStarted: false,
+              gameStatus: "answer-revealed",
+              currentQuestion: null,
+            });
+            get().addLogEntry(`Kết thúc vòng Khởi động - ${team?.teamName || "Đội thi"} - Hết thời gian (${state.khoiDongAnsweredCount}/12 câu)`);
+            broadcastState({
+              timerRunning: false,
+              khoiDongStarted: false,
+              gameStatus: "answer-revealed",
+              currentQuestion: null,
+            });
+          }
         } else if (state.timerSeconds === 0 && state.timerRunning) {
           set({ timerRunning: false });
           broadcastState({ timerRunning: false });
         }
       },
 
-      buzz: (playerId) => {
+      scoreAdd: (teamId, delta) => {
         const state = get();
-        if (state.gameStatus !== "question-open") return;
-        if (state.players.find((p) => p.id === playerId)?.status !== "ready") return;
-
-        set({
-          players: state.players.map((p) =>
-            p.id === playerId ? { ...p, status: "buzzed" as const } : p
-          ),
-        });
-        get().addLogEntry(`Thí sinh ${playerId} bấm chuông`);
-        broadcastState({
-          players: state.players.map((p) =>
-            p.id === playerId ? { ...p, status: "buzzed" as const } : p
-          ),
-        });
-      },
-
-      answer: (playerId, optionIndex) => {
-        const state = get();
-        const player = state.players.find((p) => p.id === playerId);
-        if (!player || player.status !== "buzzed") return;
-
-        const isCorrect = state.currentQuestion?.correctIndex === optionIndex;
-        set({
-          players: state.players.map((p) =>
-            p.id === playerId ? { ...p, status: "answered" as const } : p
-          ),
-        });
-
-        if (isCorrect && state.currentQuestion) {
-          get().scoreAdd(playerId, state.currentQuestion.points);
-          get().addLogEntry(`Thí sinh ${playerId} trả lời đúng +${state.currentQuestion.points}`);
-          
-          // Trigger flash and confetti
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("flash", { detail: "correct" }));
-            window.dispatchEvent(new CustomEvent("confetti"));
-          }
-        } else {
-          get().addLogEntry(`Thí sinh ${playerId} trả lời sai`);
-          
-          // Trigger wrong flash
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("flash", { detail: "wrong" }));
-          }
+        const updatedTeams = state.teams.map((team) =>
+          team.teamId === teamId ? { ...team, score: team.score + delta } : team
+        );
+        set({ teams: updatedTeams });
+        const team = updatedTeams.find((t) => t.teamId === teamId);
+        if (team) {
+          get().addLogEntry(`${team.teamName}: ${delta > 0 ? "+" : ""}${delta} điểm`);
         }
-
-        broadcastState({
-          players: state.players.map((p) =>
-            p.id === playerId ? { ...p, status: "answered" as const } : p
-          ),
-        });
+        broadcastState({ teams: updatedTeams });
       },
 
-      scoreAdd: (playerId, delta) => {
+      scoreSet: (teamId, value) => {
         const state = get();
-        set({
-          players: state.players.map((p) =>
-            p.id === playerId ? { ...p, score: p.score + delta } : p
-          ),
-        });
-        broadcastState({
-          players: state.players.map((p) =>
-            p.id === playerId ? { ...p, score: p.score + delta } : p
-          ),
-        });
-      },
-
-      scoreSet: (playerId, value) => {
-        const state = get();
-        set({
-          players: state.players.map((p) =>
-            p.id === playerId ? { ...p, score: value } : p
-          ),
-        });
-        get().addLogEntry(`Thí sinh ${playerId}: ${value} điểm`);
-        broadcastState({
-          players: state.players.map((p) =>
-            p.id === playerId ? { ...p, score: value } : p
-          ),
-        });
+        const updatedTeams = state.teams.map((team) =>
+          team.teamId === teamId ? { ...team, score: value } : team
+        );
+        set({ teams: updatedTeams });
+        const team = updatedTeams.find((t) => t.teamId === teamId);
+        if (team) {
+          get().addLogEntry(`${team.teamName}: ${value} điểm`);
+        }
+        broadcastState({ teams: updatedTeams });
       },
 
       toggleSound: () => {
@@ -279,12 +345,16 @@ export const useGameStore = create<GameStore>()(
       },
 
       resetGame: () => {
+        const state = get();
         set({
           ...initialState,
-          players: initialPlayers,
+          teams: state.teams.map((team) => ({ ...team, score: 0 })),
         });
         get().addLogEntry("Khởi động lại game");
-        broadcastState(initialState);
+        broadcastState({
+          ...initialState,
+          teams: state.teams.map((team) => ({ ...team, score: 0 })),
+        });
       },
 
       addLogEntry: (message) => {
@@ -298,24 +368,63 @@ export const useGameStore = create<GameStore>()(
         }));
       },
 
-      setSelectedPlayer: (playerId) => {
-        set({ selectedPlayerId: playerId });
+      setSelectedTeam: (teamId) => {
+        set({ selectedTeamId: teamId });
       },
 
       // Khởi động actions
-      setKhoiDongPlayer: (playerId) => {
-        set({ khoiDongActivePlayerId: playerId });
-        broadcastState({ khoiDongActivePlayerId: playerId });
+      setKhoiDongTeam: (teamId) => {
+        set({ 
+          khoiDongActiveTeamId: teamId,
+          khoiDongStarted: false,
+          khoiDongSelectedPackage: null,
+        });
+        broadcastState({ 
+          khoiDongActiveTeamId: teamId,
+          khoiDongStarted: false,
+          khoiDongSelectedPackage: null,
+        });
+      },
+
+      selectKhoiDongPackage: (packageNumber) => {
+        const state = get();
+        if (state.currentRound !== "khoi-dong" || !state.khoiDongActiveTeamId) return;
+        
+        // Kiểm tra gói đã được chọn bởi đội khác chưa
+        const packageTakenBy = Object.entries(state.khoiDongTeamPackages).find(
+          ([teamId, pkg]) => pkg === packageNumber && teamId !== state.khoiDongActiveTeamId
+        );
+        if (packageTakenBy) return; // Gói đã được chọn bởi đội khác
+
+        // Lưu gói cho đội này
+        const updatedTeamPackages = {
+          ...state.khoiDongTeamPackages,
+          [state.khoiDongActiveTeamId]: packageNumber,
+        };
+        
+        set({ 
+          khoiDongSelectedPackage: packageNumber,
+          khoiDongTeamPackages: updatedTeamPackages,
+        });
+        broadcastState({ 
+          khoiDongSelectedPackage: packageNumber,
+          khoiDongTeamPackages: updatedTeamPackages,
+        });
       },
 
       startKhoiDong: () => {
         const state = get();
-        if (state.currentRound !== "khoi-dong" || !state.khoiDongActivePlayerId) return;
+        if (state.currentRound !== "khoi-dong" || !state.khoiDongActiveTeamId || !state.khoiDongSelectedPackage) return;
 
-        const khoiDongQuestions = questions["khoi-dong"];
-        if (khoiDongQuestions.length === 0) return;
+        const packageIndex = state.khoiDongSelectedPackage - 1; // packageNumber là 1-4, index là 0-3
+        const packageQuestions = state.khoiDongPackages[packageIndex];
+        if (!packageQuestions || packageQuestions.length === 0) {
+          console.warn(`Không có câu hỏi trong gói ${state.khoiDongSelectedPackage}`);
+          return;
+        }
 
-        const firstQuestion = khoiDongQuestions[0];
+        const firstQuestion = packageQuestions[0];
+        const team = state.teams.find((t) => t.teamId === state.khoiDongActiveTeamId);
         set({
           khoiDongStarted: true,
           khoiDongQuestionIndex: 0,
@@ -323,8 +432,11 @@ export const useGameStore = create<GameStore>()(
           selectedQuestionId: firstQuestion.id,
           currentQuestion: firstQuestion,
           gameStatus: "question-open",
+          timerSeconds: 60,
+          timerInitial: 60,
+          timerRunning: true,
         });
-        get().addLogEntry(`Bắt đầu vòng Khởi động - Thí sinh ${state.khoiDongActivePlayerId}`);
+        get().addLogEntry(`Bắt đầu vòng Khởi động - ${team?.teamName || "Đội thi"} - Gói ${state.khoiDongSelectedPackage}`);
         broadcastState({
           khoiDongStarted: true,
           khoiDongQuestionIndex: 0,
@@ -332,18 +444,27 @@ export const useGameStore = create<GameStore>()(
           selectedQuestionId: firstQuestion.id,
           currentQuestion: firstQuestion,
           gameStatus: "question-open",
+          timerSeconds: 60,
+          timerInitial: 60,
+          timerRunning: true,
         });
       },
 
       markKhoiDongAnswer: (isCorrect) => {
         const state = get();
-        if (state.currentRound !== "khoi-dong" || !state.khoiDongStarted || !state.khoiDongActivePlayerId) return;
+        if (state.currentRound !== "khoi-dong" || !state.khoiDongStarted || !state.khoiDongActiveTeamId || !state.khoiDongSelectedPackage) return;
         if (state.khoiDongAnsweredCount >= 12) return; // Tối đa 12 câu
+
+        const packageIndex = state.khoiDongSelectedPackage - 1;
+        const packageQuestions = state.khoiDongPackages[packageIndex];
+        if (!packageQuestions) return;
+
+        const team = state.teams.find((t) => t.teamId === state.khoiDongActiveTeamId);
 
         if (isCorrect) {
           // Trả lời đúng: +10 điểm, tự động chuyển câu tiếp
-          get().scoreAdd(state.khoiDongActivePlayerId, 10);
-          get().addLogEntry(`Thí sinh ${state.khoiDongActivePlayerId} trả lời đúng +10 điểm`);
+          get().scoreAdd(state.khoiDongActiveTeamId, 10);
+          get().addLogEntry(`${team?.teamName || "Đội thi"} trả lời đúng +10 điểm`);
 
           // Trigger flash and confetti
           if (typeof window !== "undefined") {
@@ -351,28 +472,32 @@ export const useGameStore = create<GameStore>()(
             window.dispatchEvent(new CustomEvent("confetti"));
           }
 
-          // Tự động chuyển câu hỏi tiếp theo
-          const khoiDongQuestions = questions["khoi-dong"];
           const newAnsweredCount = state.khoiDongAnsweredCount + 1;
           const nextIndex = state.khoiDongQuestionIndex + 1;
 
-          // Nếu đã trả lời đủ 12 câu, kết thúc
+          // Nếu đã trả lời đủ 12 câu, kết thúc vòng thi
           if (newAnsweredCount >= 12) {
             set({
               khoiDongAnsweredCount: 12,
               gameStatus: "answer-revealed",
+              khoiDongStarted: false,
+              currentQuestion: null,
+              timerRunning: false,
             });
-            get().addLogEntry(`Kết thúc vòng Khởi động - Thí sinh ${state.khoiDongActivePlayerId} (12/12 câu)`);
+            get().addLogEntry(`Kết thúc vòng Khởi động - ${team?.teamName || "Đội thi"} - Gói ${state.khoiDongSelectedPackage} (12/12 câu)`);
             broadcastState({
               khoiDongAnsweredCount: 12,
               gameStatus: "answer-revealed",
+              khoiDongStarted: false,
+              currentQuestion: null,
+              timerRunning: false,
             });
             return;
           }
 
-          // Chuyển câu hỏi tiếp theo (lặp lại nếu hết câu)
-          const questionIndex = nextIndex % khoiDongQuestions.length;
-          const nextQuestion = khoiDongQuestions[questionIndex];
+          // Chuyển câu hỏi tiếp theo
+          const nextQuestion = packageQuestions[nextIndex];
+          if (!nextQuestion) return;
           
           set({
             khoiDongQuestionIndex: nextIndex,
@@ -389,20 +514,81 @@ export const useGameStore = create<GameStore>()(
             gameStatus: "question-open",
           });
         } else {
-          // Trả lời sai: không mất điểm, không chuyển câu, vẫn ở câu hiện tại
-          get().addLogEntry(`Thí sinh ${state.khoiDongActivePlayerId} trả lời sai (không mất điểm)`);
+          // Trả lời sai: không mất điểm, nhưng vẫn chuyển câu tiếp theo
+          get().addLogEntry(`${team?.teamName || "Đội thi"} trả lời sai (không mất điểm)`);
 
           // Trigger wrong flash
           if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("flash", { detail: "wrong" }));
           }
+
+          const newAnsweredCount = state.khoiDongAnsweredCount + 1;
+          const nextIndex = state.khoiDongQuestionIndex + 1;
+
+          // Nếu đã trả lời đủ 12 câu, kết thúc vòng thi
+          if (newAnsweredCount >= 12) {
+            set({
+              khoiDongAnsweredCount: 12,
+              gameStatus: "answer-revealed",
+              khoiDongStarted: false,
+              currentQuestion: null,
+              timerRunning: false,
+            });
+            get().addLogEntry(`Kết thúc vòng Khởi động - ${team?.teamName || "Đội thi"} - Gói ${state.khoiDongSelectedPackage} (12/12 câu)`);
+            broadcastState({
+              khoiDongAnsweredCount: 12,
+              gameStatus: "answer-revealed",
+              khoiDongStarted: false,
+              currentQuestion: null,
+              timerRunning: false,
+            });
+            return;
+          }
+
+          // Chuyển câu hỏi tiếp theo
+          const nextQuestion = packageQuestions[nextIndex];
+          if (!nextQuestion) return;
+          
+          set({
+            khoiDongQuestionIndex: nextIndex,
+            khoiDongAnsweredCount: newAnsweredCount,
+            selectedQuestionId: nextQuestion.id,
+            currentQuestion: nextQuestion,
+            gameStatus: "question-open",
+          });
+          broadcastState({
+            khoiDongQuestionIndex: nextIndex,
+            khoiDongAnsweredCount: newAnsweredCount,
+            selectedQuestionId: nextQuestion.id,
+            currentQuestion: nextQuestion,
+            gameStatus: "question-open",
+          });
         }
       },
     }),
     {
       name: "game-storage",
+      partialize: (state) => ({
+        // Don't persist questions and packages, they will be loaded from API
+        currentRound: state.currentRound,
+        selectedQuestionId: state.selectedQuestionId,
+        currentQuestion: state.currentQuestion,
+        gameStatus: state.gameStatus,
+        timerSeconds: state.timerSeconds,
+        timerRunning: state.timerRunning,
+        timerInitial: state.timerInitial,
+        teams: state.teams,
+        selectedTeamId: state.selectedTeamId,
+        khoiDongActiveTeamId: state.khoiDongActiveTeamId,
+        khoiDongQuestionIndex: state.khoiDongQuestionIndex,
+        khoiDongAnsweredCount: state.khoiDongAnsweredCount,
+        khoiDongStarted: state.khoiDongStarted,
+        khoiDongSelectedPackage: state.khoiDongSelectedPackage,
+        khoiDongTeamPackages: state.khoiDongTeamPackages,
+        soundEnabled: state.soundEnabled,
+        ambienceEnabled: state.ambienceEnabled,
+        log: state.log,
+      }),
     }
   )
 );
-
-

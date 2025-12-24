@@ -8,9 +8,9 @@ import { Trophy, Medal } from "lucide-react";
 export default function ScoreboardPage() {
   useBroadcastSync(); // Sync with other tabs
 
-  const { players, log } = useGameStore();
+  const { teams, log } = useGameStore();
 
-  const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+  const sortedTeams = [...teams].sort((a, b) => b.score - a.score);
 
   const getRankIcon = (index: number) => {
     switch (index) {
@@ -29,19 +29,19 @@ export default function ScoreboardPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-8">
       <div className="max-w-4xl mx-auto">
         <motion.h1
-          className="text-5xl font-bold text-center mb-8 bg-gradient-to-r from-neon-blue to-neon-purple bg-clip-text text-transparent"
+          className="text-5xl font-bold text-center mb-8 text-white"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          Bảng xếp hạng
+          Bảng điểm
         </motion.h1>
 
         {/* Leaderboard */}
         <div className="space-y-4 mb-8">
           <AnimatePresence>
-            {sortedPlayers.map((player, index) => (
+            {sortedTeams.map((team, index) => (
               <motion.div
-                key={player.id}
+                key={team.teamId}
                 initial={{ opacity: 0, x: -50 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 50 }}
@@ -70,22 +70,22 @@ export default function ScoreboardPage() {
                           }
                         `}
                       >
-                        {player.id}
+                        {team.teamName.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <div className="text-xl font-bold text-white">{player.name}</div>
-                        <div className="text-sm text-gray-400">Thí sinh {player.id}</div>
+                        <div className="text-xl font-bold text-white">{team.teamName}</div>
+                        <div className="text-sm text-gray-400">Đội thi</div>
                       </div>
                     </div>
                   </div>
                   <motion.div
                     className="text-4xl font-bold text-neon-green tabular-nums"
-                    key={player.score}
+                    key={team.score}
                     initial={{ scale: 1.3, color: "#00ff88" }}
                     animate={{ scale: 1, color: "#00ff88" }}
                     transition={{ duration: 0.3 }}
                   >
-                    {player.score}
+                    {team.score}
                   </motion.div>
                 </div>
 

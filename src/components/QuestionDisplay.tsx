@@ -4,8 +4,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "@/lib/store";
 import { GameStatus } from "@/lib/types";
 
-export function QuestionDisplay() {
-  const { currentQuestion, gameStatus } = useGameStore();
+interface QuestionDisplayProps {
+  hideQAType?: boolean;
+}
+
+export function QuestionDisplay({ hideQAType = false }: QuestionDisplayProps = {}) {
+  const { currentQuestion, gameStatus, currentRound, khoiDongActivePlayerId, khoiDongStarted } = useGameStore();
 
   const getStatusText = (status: GameStatus) => {
     switch (status) {
@@ -43,9 +47,15 @@ export function QuestionDisplay() {
           >
             <div className="text-center">
               <div className="text-4xl font-bold text-neon-blue mb-4">
-                {getStatusText(gameStatus)}
+                {currentRound === "khoi-dong" && !khoiDongActivePlayerId
+                  ? "Chờ MC chọn đội"
+                  : getStatusText(gameStatus)}
               </div>
-              <div className="text-gray-400 text-lg">Vui lòng chờ...</div>
+              <div className="text-gray-400 text-lg">
+                {currentRound === "khoi-dong" && !khoiDongActivePlayerId
+                  ? "Vui lòng chờ MC chọn đội thi..."
+                  : "Vui lòng chờ..."}
+              </div>
             </div>
           </motion.div>
         ) : (
@@ -57,18 +67,19 @@ export function QuestionDisplay() {
             transition={{ duration: 0.5 }}
             className="p-8 h-full flex flex-col"
           >
-            <div className="text-2xl font-bold text-white mb-6 leading-relaxed">
+            <div className="text-xl font-bold text-white mb-6 leading-relaxed">
               {currentQuestion.text}
             </div>
 
             {/* Câu hỏi hỏi đáp (không có options) */}
             {(!currentQuestion.options || currentQuestion.options.length === 0 || currentQuestion.isOpenEnded) ? (
+              hideQAType ? null : (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="text-4xl font-bold text-neon-blue mb-4">
+                    <div className="text-3xl font-bold text-neon-blue mb-4">
                     Câu hỏi hỏi đáp
                   </div>
-                  <div className="text-xl text-gray-300 mb-2">
+                    <div className="text-lg text-gray-300 mb-2">
                     Thí sinh trả lời bằng lời nói
                   </div>
                   <div className="text-sm text-gray-400">
@@ -76,6 +87,7 @@ export function QuestionDisplay() {
                   </div>
                 </div>
               </div>
+              )
             ) : (
               /* Câu hỏi trắc nghiệm (có options) */
               <div className="grid grid-cols-2 gap-4 flex-1">

@@ -27,7 +27,7 @@ export default function Home() {
         </motion.p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
-          <Link href="/stage">
+          <Link href="/login">
             <motion.div
               className="p-6 bg-gray-800 rounded-xl border-2 border-gray-700 hover:border-neon-blue transition-all cursor-pointer"
               whileHover={{ scale: 1.05 }}
@@ -35,11 +35,11 @@ export default function Home() {
             >
               <Users className="w-12 h-12 mx-auto mb-4 text-neon-blue" />
               <h2 className="text-xl font-bold mb-2">Màn hình thi</h2>
-              <p className="text-sm text-gray-400">Dành cho thí sinh</p>
+              <p className="text-sm text-gray-400">Các đội vào phòng thi</p>
             </motion.div>
           </Link>
 
-          <Link href="/control">
+          <Link href="/control/login">
             <motion.div
               className="p-6 bg-gray-800 rounded-xl border-2 border-gray-700 hover:border-neon-purple transition-all cursor-pointer"
               whileHover={{ scale: 1.05 }}
@@ -47,7 +47,7 @@ export default function Home() {
             >
               <Mic className="w-12 h-12 mx-auto mb-4 text-neon-purple" />
               <h2 className="text-xl font-bold mb-2">Điều khiển</h2>
-              <p className="text-sm text-gray-400">Dành cho MC</p>
+              <p className="text-sm text-gray-400">Đăng nhập MC</p>
             </motion.div>
           </Link>
 

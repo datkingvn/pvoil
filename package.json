@@ -10,9 +10,13 @@
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.1.18",
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3",
     "framer-motion": "^12.23.26",
     "howler": "^2.2.4",
     "lucide-react": "^0.562.0",
+    "mongodb": "^7.0.0",
+    "mongoose": "^9.0.2",
     "next": "^16.1.1",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",

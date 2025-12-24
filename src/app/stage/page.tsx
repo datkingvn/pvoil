@@ -6,28 +6,36 @@ import { useGameStore } from "@/lib/store";
 import { useBroadcastSync } from "@/hooks/useBroadcastSync";
 import { Timer } from "@/components/Timer";
 import { QuestionDisplay } from "@/components/QuestionDisplay";
-import { PlayerCard } from "@/components/PlayerCard";
-import { BuzzButton } from "@/components/BuzzButton";
+import { TeamCard } from "@/components/TeamCard";
 import { FlashOverlay } from "@/components/FlashOverlay";
 import { Confetti } from "@/components/Confetti";
 import { roundNames } from "@/lib/questions";
-import { Maximize2, Minimize2, Volume2, VolumeX } from "lucide-react";
+import { Maximize2, Minimize2, Volume2, VolumeX, LogOut } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function StagePage() {
   useBroadcastSync(); // Sync with other tabs
+  const { team, logout } = useAuth();
 
   const {
     currentRound,
     gameStatus,
-    players,
+    teams,
     soundEnabled,
     ambienceEnabled,
     khoiDongStarted,
-    khoiDongActivePlayerId,
+    khoiDongActiveTeamId,
     khoiDongAnsweredCount,
+    khoiDongSelectedPackage,
+    khoiDongTeamPackages,
     toggleSound,
     toggleAmbience,
+    loadTeams,
   } = useGameStore();
+
+  useEffect(() => {
+    loadTeams();
+  }, [loadTeams]);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
@@ -80,9 +88,24 @@ export default function StagePage() {
               {currentRound ? roundNames[currentRound] : "Chưa chọn vòng thi"}
             </h1>
             <div className="text-lg text-gray-400">{getStatusText()}</div>
+            {team && (
+              <div className="text-sm text-neon-purple mt-1">
+                Đội thi: {team.teamName}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
+            {team && (
+              <button
+                onClick={logout}
+                className="px-4 py-2 bg-red-600/20 border border-red-600 text-red-400 rounded-lg hover:bg-red-600/30 transition-colors flex items-center gap-2"
+                title="Đăng xuất"
+              >
+                <LogOut className="w-4 h-4" />
+                Đăng xuất
+              </button>
+            )}
             <Timer />
 
             <div className="flex gap-2">
@@ -125,44 +148,124 @@ export default function StagePage() {
           </div>
         </div>
 
-        {/* LED Wall - Question Display */}
-        <div className="h-[400px]">
-          <QuestionDisplay />
-        </div>
-
-        {/* Players Grid */}
-        <div className="grid grid-cols-4 gap-4">
-          {players.map((player) => (
-            <PlayerCard key={player.id} player={player} />
-          ))}
-        </div>
-
-        {/* Buzz Buttons Row - Ẩn khi đang ở vòng Khởi động */}
-        {!(currentRound === "khoi-dong" && khoiDongStarted) && (
-          <div className="grid grid-cols-4 gap-4">
-            {players.map((player) => (
-              <div key={player.id} className="flex justify-center">
-                <BuzzButton
-                  playerId={player.id}
-                  disabled={gameStatus !== "question-open" || player.status !== "ready"}
-                />
+        {/* LED Wall - Question Display hoặc Hiển thị gói câu hỏi */}
+        {currentRound === "khoi-dong" && khoiDongActiveTeamId && !khoiDongSelectedPackage && !khoiDongStarted ? (
+          <div className="flex flex-col items-center justify-center space-y-8">
+            {/* Thông tin đội thi */}
+            <div className="w-full max-w-2xl">
+              <div className="bg-gray-800/90 border border-white/20 rounded-lg p-8 text-center">
+                <div className="text-5xl font-bold text-white mb-3">
+                  {teams.find((t) => t.teamId === khoiDongActiveTeamId)?.teamName}
+                </div>
+                <div className="text-xl text-gray-300">
+                  Đã được chọn để thi vòng Khởi động
+                </div>
+                </div>
               </div>
-            ))}
+              
+            {/* Hiển thị gói câu hỏi (chỉ xem, không chọn được) */}
+            <div className="w-full max-w-4xl">
+              <h2 className="text-3xl font-bold text-white mb-2 text-center">
+                Chọn gói câu hỏi
+              </h2>
+              <p className="text-lg text-gray-400 mb-6 text-center">
+                Đang chờ MC chọn gói câu hỏi
+              </p>
+              <div className="grid grid-cols-2 gap-6">
+                {[1, 2, 3, 4].map((packageNum) => {
+                  // Kiểm tra gói đã được chọn bởi đội khác chưa
+                  const packageTakenBy = Object.entries(khoiDongTeamPackages).find(
+                    ([teamId, pkg]) => pkg === packageNum && teamId !== khoiDongActiveTeamId
+                  );
+                  const isTaken = !!packageTakenBy;
+                  
+                  return (
+                    <motion.div
+                      key={packageNum}
+                      className={`
+                        bg-gray-800/90 border border-white/20 rounded-lg p-8 text-center
+                        transition-all duration-300
+                        ${
+                          isTaken
+                            ? "text-gray-500 opacity-50"
+                            : "text-white"
+                        }
+                      `}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: packageNum * 0.1 }}
+                    >
+                      <div className="text-4xl font-bold mb-2">Gói {packageNum}</div>
+                      <div className="text-lg text-gray-300">12 câu hỏi</div>
+                      {isTaken && (
+                        <div className="text-sm text-red-400 mt-2">Đã được chọn</div>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="h-[400px]">
+            <QuestionDisplay />
+          </div>
+        )}
+
+        {/* Teams Score Board */}
+        {teams.length > 0 && (
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-neon-blue mb-2">Bảng điểm</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {teams
+                .sort((a, b) => b.score - a.score)
+                .map((team) => (
+                  <TeamCard key={team.teamId} team={team} />
+                ))}
+            </div>
           </div>
         )}
 
         {/* Hiển thị thông tin vòng Khởi động */}
-        {currentRound === "khoi-dong" && khoiDongStarted && (
+        {currentRound === "khoi-dong" && khoiDongActiveTeamId && (
           <div className="bg-neon-blue/20 border-2 border-neon-blue rounded-xl p-6 text-center">
-            <div className="text-2xl font-bold text-neon-blue mb-2">
-              Vòng Khởi động - {players.find((p) => p.id === khoiDongActivePlayerId)?.name}
-            </div>
-            <div className="text-lg text-gray-300">
-              Đã trả lời: {khoiDongAnsweredCount} / 12 câu
-            </div>
-            <div className="text-sm text-gray-400 mt-2">
-              MC sẽ chấm điểm trực tiếp
-            </div>
+            {khoiDongStarted ? (
+              <>
+                <div className="text-2xl font-bold text-neon-blue mb-2">
+                  Vòng Khởi động - {teams.find((t) => t.teamId === khoiDongActiveTeamId)?.teamName}
+                </div>
+                <div className="text-lg text-gray-300 mb-2">
+                  Gói {khoiDongSelectedPackage} - Đã trả lời: {khoiDongAnsweredCount} / 12 câu
+                </div>
+                <div className="text-sm text-gray-400 mt-2">
+                  MC sẽ chấm điểm trực tiếp
+                </div>
+              </>
+            ) : khoiDongSelectedPackage ? (
+              <>
+                <div className="text-2xl font-bold text-neon-blue mb-2">
+                  {teams.find((t) => t.teamId === khoiDongActiveTeamId)?.teamName}
+                </div>
+                <div className="text-lg text-gray-300 mb-2">
+                  Đã chọn: Gói {khoiDongSelectedPackage}
+                </div>
+                <div className="text-sm text-gray-400 mt-2">
+                  Chờ MC bắt đầu vòng thi
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-neon-blue mb-2">
+                  {teams.find((t) => t.teamId === khoiDongActiveTeamId)?.teamName}
+                </div>
+                <div className="text-lg text-gray-300 mb-2">
+                  Đã được chọn để thi vòng Khởi động
+                </div>
+                <div className="text-sm text-gray-400 mt-2">
+                  Chờ MC chọn gói câu hỏi
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
