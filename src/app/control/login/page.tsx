@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { LogIn, UserPlus, Mic } from "lucide-react";
+import { Logo } from "@/components/Logo";
 
 export default function MCLoginPage() {
   const router = useRouter();
@@ -92,13 +93,15 @@ export default function MCLoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-8 relative overflow-hidden">
+      <div className="absolute inset-0 bg-radial-gradient bg-grid-soft opacity-80 pointer-events-none" />
+      <Logo className="mb-8 relative z-10" logoClassName="w-40" textClassName="text-base" />
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
+        className="w-full max-w-md relative z-10 panel-elevated"
       >
-        <div className="bg-gray-800 rounded-xl border-2 border-gray-700 p-8 shadow-2xl">
+        <div className="p-8">
           <div className="text-center mb-8">
             <motion.div
               initial={{ scale: 0 }}

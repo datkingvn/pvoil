@@ -2,13 +2,25 @@
 
 @layer base {
   body {
-    @apply bg-black text-white;
+    @apply bg-slate-950 text-white;
   }
 }
 
 @layer utilities {
   .bg-radial-gradient {
-    background: radial-gradient(circle, transparent 0%, rgba(0, 0, 0, 0.5) 100%);
+    background: radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.12), transparent 55%),
+      radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.16), transparent 55%),
+      radial-gradient(circle, transparent 0%, rgba(0, 0, 0, 0.7) 100%);
+  }
+
+  .bg-grid-soft {
+    background-image: linear-gradient(to right, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148, 163, 184, 0.14) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .panel-elevated {
+    @apply bg-slate-900/80 border border-white/10 rounded-2xl shadow-[0_20px_60px_rgba(15,23,42,0.9)] backdrop-blur-xl;
   }
 }
 

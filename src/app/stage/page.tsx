@@ -9,6 +9,7 @@ import { QuestionDisplay } from "@/components/QuestionDisplay";
 import { TeamCard } from "@/components/TeamCard";
 import { FlashOverlay } from "@/components/FlashOverlay";
 import { Confetti } from "@/components/Confetti";
+import { Logo } from "@/components/Logo";
 import { roundNames } from "@/lib/questions";
 import { Maximize2, Minimize2, Volume2, VolumeX, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -71,9 +72,9 @@ export default function StagePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
       {/* Stage lighting effects */}
-      <div className="absolute inset-0 bg-radial-gradient pointer-events-none" />
+      <div className="absolute inset-0 bg-radial-gradient bg-grid-soft opacity-80 pointer-events-none" />
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-neon-blue/10 rounded-full blur-3xl" />
       <div className="absolute bottom-0 right-0 w-96 h-96 bg-neon-purple/10 rounded-full blur-3xl" />
 
@@ -82,17 +83,20 @@ export default function StagePage() {
 
       <div className="relative z-10 p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-neon-blue mb-2">
-              {currentRound ? roundNames[currentRound] : "Chưa chọn vòng thi"}
-            </h1>
-            <div className="text-lg text-gray-400">{getStatusText()}</div>
-            {team && (
-              <div className="text-sm text-neon-purple mt-1">
-                Đội thi: {team.teamName}
-              </div>
-            )}
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-6">
+            <Logo logoClassName="w-32" textClassName="text-sm" />
+            <div>
+              <h1 className="text-3xl font-bold text-neon-blue mb-2">
+                {currentRound ? roundNames[currentRound] : "Chưa chọn vòng thi"}
+              </h1>
+              <div className="text-lg text-gray-400">{getStatusText()}</div>
+              {team && (
+                <div className="text-sm text-neon-purple mt-1">
+                  Đội thi: {team.teamName}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
@@ -106,7 +110,6 @@ export default function StagePage() {
                 Đăng xuất
               </button>
             )}
-            <Timer />
 
             <div className="flex gap-2">
               <button
@@ -207,7 +210,7 @@ export default function StagePage() {
             </div>
           </div>
         ) : (
-          <div className="h-[400px]">
+          <div className="h-[400px] overflow-visible">
             <QuestionDisplay />
           </div>
         )}

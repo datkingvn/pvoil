@@ -7,10 +7,10 @@ import { useGameStore } from "@/lib/store";
 import { useBroadcastSync } from "@/hooks/useBroadcastSync";
 import { roundNames } from "@/lib/questions";
 import { RoundType } from "@/lib/types";
-import { Timer } from "@/components/Timer";
 import { QuestionDisplay } from "@/components/QuestionDisplay";
 import { TeamCard } from "@/components/TeamCard";
 import { Toast } from "@/components/Toast";
+import { Logo } from "@/components/Logo";
 import {
   Play,
   Pause,
@@ -44,6 +44,7 @@ export default function ControlPage() {
     currentQuestion,
     gameStatus,
     timerRunning,
+    timerSeconds,
     teams,
     selectedTeamId,
     khoiDongActiveTeamId,
@@ -185,8 +186,9 @@ export default function ControlPage() {
   const currentRoundQuestions = currentRound ? (questions[currentRound] || []) : [];
 
   return (
-    <div className="min-h-screen bg-gray-900 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+      <div className="absolute inset-0 bg-radial-gradient bg-grid-soft opacity-80 pointer-events-none" />
+      <div className="max-w-7xl mx-auto relative z-10 p-6">
         {/* Toast Notification - Fixed at top */}
         {toast && (
           <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
@@ -198,14 +200,17 @@ export default function ControlPage() {
           </div>
         )}
 
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-neon-blue">Điều khiển MC</h1>
-            {user && (
-              <p className="text-sm text-neon-purple mt-1">
-                Đăng nhập với: {user.username}
-              </p>
-            )}
+        <div className="flex items-center justify-between mb-6 panel-elevated px-6 py-4">
+          <div className="flex items-center gap-6">
+            <Logo logoClassName="w-32" textClassName="text-sm" />
+            <div>
+              <h1 className="text-3xl font-bold text-neon-blue">Điều khiển MC</h1>
+              {user && (
+                <p className="text-sm text-neon-purple mt-1">
+                  Đăng nhập với: {user.username}
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -405,11 +410,19 @@ export default function ControlPage() {
           <div className="space-y-4">
             <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
               <h2 className="text-xl font-bold mb-4 text-white">Preview Stage</h2>
-              <div className="h-[300px] mb-4">
+              <div className="h-[300px] mb-4 relative">
                 <QuestionDisplay hideQAType={true} />
-              </div>
-              <div className="flex items-center justify-center mb-6">
-                <Timer />
+                {/* Timer cho MC - dạng số, hiển thị gọn ở góc dưới bên phải */}
+                <div className="absolute bottom-4 right-4 bg-black/60 px-4 py-2 rounded-lg border border-neon-blue/40 shadow-lg shadow-black/40">
+                  <div
+                    className={`text-2xl font-bold tabular-nums ${
+                      timerSeconds <= 5 && timerSeconds > 0 ? "text-red-400" : "text-neon-blue"
+                    }`}
+                  >
+                    {String(Math.floor(timerSeconds / 60)).padStart(2, "0")}:
+                    {String(timerSeconds % 60).padStart(2, "0")}
+                  </div>
+                </div>
               </div>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {teams.map((team) => (

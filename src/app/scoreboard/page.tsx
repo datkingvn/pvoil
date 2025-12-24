@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "@/lib/store";
 import { useBroadcastSync } from "@/hooks/useBroadcastSync";
 import { Trophy, Medal } from "lucide-react";
+import { Logo } from "@/components/Logo";
 
 export default function ScoreboardPage() {
   useBroadcastSync(); // Sync with other tabs
@@ -26,8 +27,10 @@ export default function ScoreboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-8 relative overflow-hidden">
+      <div className="absolute inset-0 bg-radial-gradient bg-grid-soft opacity-80 pointer-events-none" />
+      <div className="max-w-4xl mx-auto relative z-10 panel-elevated p-8">
+        <Logo className="mb-6" logoClassName="w-40" textClassName="text-base" />
         <motion.h1
           className="text-5xl font-bold text-center mb-8 text-white"
           initial={{ opacity: 0, y: -20 }}

@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Mic, Users, Trophy } from "lucide-react";
+import { Logo } from "@/components/Logo";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-8">
-      <div className="text-center space-y-8 max-w-2xl">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-8 relative overflow-hidden">
+      <div className="absolute inset-0 bg-radial-gradient bg-grid-soft opacity-80 pointer-events-none" />
+      <div className="text-center space-y-8 max-w-2xl relative z-10 panel-elevated py-10 px-8">
+        <Logo className="mb-8" logoClassName="w-48" />
         <motion.h1
           className="text-6xl font-bold bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink bg-clip-text text-transparent"
           initial={{ opacity: 0, y: -20 }}
