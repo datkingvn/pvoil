@@ -24,6 +24,32 @@ Hoặc nếu sử dụng MongoDB Atlas:
 MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/pvoil-olympia
 ```
 
+### 3. Cấu hình Pusher (Real-time sync đa thiết bị)
+
+Để đồng bộ real-time giữa MC và các màn hình đội thi trên nhiều thiết bị khác nhau, bạn cần tạo tài khoản Pusher miễn phí:
+
+1. **Đăng ký Pusher**: Truy cập [pusher.com](https://pusher.com) và tạo tài khoản miễn phí
+2. **Tạo app mới**: Vào Dashboard → Channels → Create app
+3. **Lấy credentials**: Copy các thông tin sau:
+   - App ID
+   - Key
+   - Secret
+   - Cluster (ví dụ: `ap1`, `us2`, `eu`, ...)
+
+4. **Thêm vào `.env.local`**:
+
+```env
+# Pusher Configuration
+PUSHER_APP_ID=your_app_id
+PUSHER_SECRET=your_secret
+NEXT_PUBLIC_PUSHER_KEY=your_key
+NEXT_PUBLIC_PUSHER_CLUSTER=ap1
+```
+
+**Lưu ý**: 
+- Pusher free tier cho phép **200,000 messages/ngày** - đủ cho game show
+- Nếu không cấu hình Pusher, ứng dụng vẫn hoạt động nhưng chỉ sync được giữa các tab trên cùng máy (qua BroadcastChannel)
+
 ### 3. Chạy ứng dụng
 
 ```bash
@@ -83,12 +109,19 @@ Mở [http://localhost:3000](http://localhost:3000) trong trình duyệt.
 - `1/2/3/4`: Chọn thí sinh A/B/C/D
 - `+/-`: Cộng/trừ điểm nhanh
 
-### 🔄 Đồng bộ đa tab
+### 🔄 Đồng bộ đa tab và đa thiết bị
 
-Dự án sử dụng **BroadcastChannel API** để đồng bộ state realtime giữa các tab:
-- Mở 1 tab `/control` và 1 tab `/stage`
-- Khi MC thao tác ở `/control`, `/stage` cập nhật ngay lập tức
-- Tự động fallback về localStorage events nếu BroadcastChannel không hỗ trợ
+Dự án hỗ trợ **2 cơ chế đồng bộ**:
+
+1. **BroadcastChannel API** (cùng máy):
+   - Đồng bộ state realtime giữa các tab trên cùng máy
+   - Mở 1 tab `/control` và 1 tab `/stage` trên cùng trình duyệt
+   - Tự động fallback về localStorage events nếu BroadcastChannel không hỗ trợ
+
+2. **Pusher WebSocket** (đa thiết bị):
+   - Đồng bộ state realtime giữa MC và các màn hình đội thi trên **nhiều thiết bị khác nhau**
+   - MC trên laptop có thể điều khiển các tablet/PC của đội thi trong cùng mạng LAN hoặc internet
+   - Yêu cầu cấu hình Pusher credentials trong `.env.local` (xem phần Cài đặt)
 
 ### 📦 Tech Stack
 
@@ -102,13 +135,14 @@ Dự án sử dụng **BroadcastChannel API** để đồng bộ state realtime 
 - **React Hotkeys Hook** (phím tắt)
 - **Howler** (âm thanh - sử dụng Web Audio API)
 - **Lucide React** (icons)
+- **Pusher** (real-time WebSocket sync đa thiết bị)
 
 ### 🎯 4 Vòng thi
 
-1. **Khởi động**: Câu hỏi nhanh (8 câu)
-2. **Vượt chướng ngại vật**: Grid 4x4 với từ khóa (8 câu)
-3. **Tăng tốc**: Chuỗi câu liên tiếp (8 câu)
-4. **Về đích**: Chọn gói điểm (8 câu)
+1. **Vòng 1: Khơi nguồn năng lượng**: Câu hỏi nhanh, làm nóng không khí trường quay
+2. **Vòng 2: Hành trình giọt dầu**: Các câu hỏi gắn với hành trình, khai thác, vận chuyển và sử dụng dầu khí
+3. **Vòng 3: Tăng tốc vận hành**: Chuỗi câu hỏi liên tiếp với nhịp độ nhanh, yêu cầu phản xạ tốt
+4. **Vòng 4: Chinh phục đỉnh cao**: Chọn gói điểm và chiến lược để bứt phá về đích
 
 Mỗi vòng có mock data đầy đủ trong `/src/lib/questions.ts`.
 

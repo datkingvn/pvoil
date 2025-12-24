@@ -62,7 +62,7 @@ const initialQuestions: Record<RoundType, Question[]> = {
   "ve-dich": [],
 };
 
-// BroadcastChannel for cross-tab sync
+// BroadcastChannel for cross-tab sync (cùng máy)
 let broadcastChannel: BroadcastChannel | null = null;
 if (typeof window !== "undefined") {
   try {
@@ -80,6 +80,15 @@ const broadcastState = (state: Partial<GameState>) => {
     } catch (e) {
       console.warn("Failed to broadcast state", e);
     }
+  }
+
+  // Đồng thời phát sự kiện cho WebSocket hook (đa thiết bị)
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("ws-state-update", {
+        detail: state,
+      })
+    );
   }
 };
 

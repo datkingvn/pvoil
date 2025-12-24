@@ -411,9 +411,9 @@ export const questions: Record<RoundType, Question[]> = {
 };
 
 export const roundNames: Record<RoundType, string> = {
-  "khoi-dong": "Khởi động",
-  "vuot-chuong-ngai-vat": "Vượt chướng ngại vật",
-  "tang-toc": "Tăng tốc",
-  "ve-dich": "Về đích",
+  "khoi-dong": "Vòng 1: Khơi nguồn năng lượng",
+  "vuot-chuong-ngai-vat": "Vòng 2: Hành trình giọt dầu",
+  "tang-toc": "Vòng 3: Tăng tốc vận hành",
+  "ve-dich": "Vòng 4: Chinh phục đỉnh cao",
 };
 

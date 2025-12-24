@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useGameStore } from "@/lib/store";
 import { useBroadcastSync } from "@/hooks/useBroadcastSync";
+import { useGameWebSocket } from "@/hooks/useGameWebSocket";
 import { roundNames } from "@/lib/questions";
 import { RoundType } from "@/lib/types";
 import { QuestionDisplay } from "@/components/QuestionDisplay";
@@ -31,7 +32,8 @@ import Link from "next/link";
 import { useMcAuth } from "@/hooks/useMcAuth";
 
 export default function ControlPage() {
-  useBroadcastSync(); // Sync with other tabs
+  useBroadcastSync(); // Sync với các tab cùng máy
+  useGameWebSocket("mc"); // Sync qua WebSocket với các thiết bị khác
   const { user, logout } = useMcAuth();
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const lastCheckedRoundRef = useRef<RoundType | null>(null);
@@ -264,7 +266,7 @@ export default function ControlPage() {
 
             {currentRound === "khoi-dong" ? (
               <div className="bg-gray-800 rounded-lg p-4 space-y-4 border border-gray-700">
-                <h2 className="text-xl font-bold mb-4 text-white">Vòng Khởi động</h2>
+                <h2 className="text-xl font-bold mb-4 text-white">Vòng 1: Khơi nguồn năng lượng</h2>
                 
                 {/* Chọn đội thi - Bước 1 */}
                 <div>

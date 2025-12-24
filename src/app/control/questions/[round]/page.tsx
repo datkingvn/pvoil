@@ -233,7 +233,7 @@ export default function RoundQuestionsPage() {
               </h1>
               <p className="text-sm text-gray-400 mt-1">
                 {isKhoiDong
-                  ? "Quản lý câu hỏi cho 4 gói vòng Khởi động"
+                  ? "Quản lý câu hỏi cho 4 gói Vòng 1: Khơi nguồn năng lượng"
                   : "Quản lý câu hỏi trắc nghiệm"}
               </p>
             </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useGameStore } from "@/lib/store";
 import { useBroadcastSync } from "@/hooks/useBroadcastSync";
+import { useGameWebSocket } from "@/hooks/useGameWebSocket";
 import { Timer } from "@/components/Timer";
 import { QuestionDisplay } from "@/components/QuestionDisplay";
 import { TeamCard } from "@/components/TeamCard";
@@ -15,7 +16,8 @@ import { Maximize2, Minimize2, Volume2, VolumeX, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function StagePage() {
-  useBroadcastSync(); // Sync with other tabs
+  useBroadcastSync(); // Sync với các tab cùng máy
+  useGameWebSocket("stage"); // Sync qua WebSocket với các thiết bị khác
   const { team, logout } = useAuth();
 
   const {
@@ -161,7 +163,7 @@ export default function StagePage() {
                   {teams.find((t) => t.teamId === khoiDongActiveTeamId)?.teamName}
                 </div>
                 <div className="text-xl text-gray-300">
-                  Đã được chọn để thi vòng Khởi động
+                  Đã được chọn để thi Vòng 1: Khơi nguồn năng lượng
                 </div>
                 </div>
               </div>
@@ -229,13 +231,13 @@ export default function StagePage() {
           </div>
         )}
 
-        {/* Hiển thị thông tin vòng Khởi động */}
+        {/* Hiển thị thông tin vòng 1: Khơi nguồn năng lượng */}
         {currentRound === "khoi-dong" && khoiDongActiveTeamId && (
           <div className="bg-neon-blue/20 border-2 border-neon-blue rounded-xl p-6 text-center">
             {khoiDongStarted ? (
               <>
                 <div className="text-2xl font-bold text-neon-blue mb-2">
-                  Vòng Khởi động - {teams.find((t) => t.teamId === khoiDongActiveTeamId)?.teamName}
+                  Vòng 1: Khơi nguồn năng lượng - {teams.find((t) => t.teamId === khoiDongActiveTeamId)?.teamName}
                 </div>
                 <div className="text-lg text-gray-300 mb-2">
                   Gói {khoiDongSelectedPackage} - Đã trả lời: {khoiDongAnsweredCount} / 12 câu
@@ -262,7 +264,7 @@ export default function StagePage() {
                   {teams.find((t) => t.teamId === khoiDongActiveTeamId)?.teamName}
                 </div>
                 <div className="text-lg text-gray-300 mb-2">
-                  Đã được chọn để thi vòng Khởi động
+                  Đã được chọn để thi Vòng 1: Khơi nguồn năng lượng
                 </div>
                 <div className="text-sm text-gray-400 mt-2">
                   Chờ MC chọn gói câu hỏi
