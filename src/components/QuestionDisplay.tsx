@@ -61,50 +61,68 @@ export function QuestionDisplay() {
               {currentQuestion.text}
             </div>
 
-            <div className="grid grid-cols-2 gap-4 flex-1">
-              {currentQuestion.options.map((option, index) => {
-                const isCorrect = index === currentQuestion.correctIndex;
-                const isRevealed = gameStatus === "answer-revealed";
-                const isSelected = false; // Could track selected answer
+            {/* Câu hỏi hỏi đáp (không có options) */}
+            {(!currentQuestion.options || currentQuestion.options.length === 0 || currentQuestion.isOpenEnded) ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-4xl font-bold text-neon-blue mb-4">
+                    Câu hỏi hỏi đáp
+                  </div>
+                  <div className="text-xl text-gray-300 mb-2">
+                    Thí sinh trả lời bằng lời nói
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    MC sẽ chấm điểm trực tiếp
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Câu hỏi trắc nghiệm (có options) */
+              <div className="grid grid-cols-2 gap-4 flex-1">
+                {currentQuestion.options.map((option, index) => {
+                  const isCorrect = index === currentQuestion.correctIndex;
+                  const isRevealed = gameStatus === "answer-revealed";
+                  const isSelected = false; // Could track selected answer
 
-                return (
-                  <motion.button
-                    key={option.label}
-                    className={`
-                      p-6 rounded-lg border-2 text-left
-                      transition-all duration-300
-                      ${
-                        isRevealed
-                          ? isCorrect
-                            ? "bg-neon-green/20 border-neon-green text-neon-green"
-                            : "bg-gray-800/50 border-gray-700 text-gray-500 opacity-50"
-                          : "bg-gray-800/50 border-gray-700 text-white hover:border-neon-blue hover:bg-gray-800"
-                      }
-                      ${isSelected && !isRevealed ? "border-neon-yellow bg-neon-yellow/10" : ""}
-                    `}
-                    whileHover={!isRevealed ? { scale: 1.02 } : {}}
-                    whileTap={!isRevealed ? { scale: 0.98 } : {}}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`
-                          w-12 h-12 rounded-full flex items-center justify-center
-                          font-bold text-xl
-                          ${
-                            isRevealed && isCorrect
-                              ? "bg-neon-green text-black"
-                              : "bg-gray-700 text-white"
-                          }
-                        `}
-                      >
-                        {option.label}
+                  return (
+                    <motion.button
+                      key={option.label}
+                      className={`
+                        p-6 rounded-lg border-2 text-left
+                        transition-all duration-300
+                        ${
+                          isRevealed
+                            ? isCorrect
+                              ? "bg-neon-green/20 border-neon-green text-neon-green"
+                              : "bg-gray-800/50 border-gray-700 text-gray-500 opacity-50"
+                            : "bg-gray-800/50 border-gray-700 text-white hover:border-neon-blue hover:bg-gray-800"
+                        }
+                        ${isSelected && !isRevealed ? "border-neon-yellow bg-neon-yellow/10" : ""}
+                      `}
+                      whileHover={!isRevealed ? { scale: 1.02 } : {}}
+                      whileTap={!isRevealed ? { scale: 0.98 } : {}}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`
+                            w-12 h-12 rounded-full flex items-center justify-center
+                            font-bold text-xl
+                            ${
+                              isRevealed && isCorrect
+                                ? "bg-neon-green text-black"
+                                : "bg-gray-700 text-white"
+                            }
+                          `}
+                        >
+                          {option.label}
+                        </div>
+                        <div className="text-lg font-semibold">{option.text}</div>
                       </div>
-                      <div className="text-lg font-semibold">{option.text}</div>
-                    </div>
-                  </motion.button>
-                );
-              })}
-            </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

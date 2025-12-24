@@ -12,11 +12,12 @@ export interface Option {
 export interface Question {
   id: string;
   text: string;
-  options: Option[];
-  correctIndex: number;
+  options?: Option[]; // Optional - không có options cho câu hỏi hỏi đáp
+  correctIndex?: number; // Optional - không cần cho câu hỏi hỏi đáp
   points: number;
   timeLimitSec: number;
   round: RoundType;
+  isOpenEnded?: boolean; // true cho câu hỏi hỏi đáp
 }
 
 export interface Player {
@@ -47,6 +48,12 @@ export interface GameState {
   // Players
   players: Player[];
   selectedPlayerId: PlayerId | null;
+  
+  // Khởi động round specific
+  khoiDongActivePlayerId: PlayerId | null;
+  khoiDongQuestionIndex: number;
+  khoiDongAnsweredCount: number;
+  khoiDongStarted: boolean;
   
   // Settings
   soundEnabled: boolean;

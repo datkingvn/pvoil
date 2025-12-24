@@ -24,6 +24,10 @@ interface GameStore extends GameState {
   resetGame: () => void;
   addLogEntry: (message: string) => void;
   setSelectedPlayer: (playerId: PlayerId | null) => void;
+  // Khởi động actions
+  setKhoiDongPlayer: (playerId: PlayerId | null) => void;
+  startKhoiDong: () => void;
+  markKhoiDongAnswer: (isCorrect: boolean) => void;
 }
 
 const initialPlayers = [
@@ -43,6 +47,10 @@ const initialState: GameState = {
   timerInitial: 0,
   players: initialPlayers,
   selectedPlayerId: null,
+  khoiDongActivePlayerId: null,
+  khoiDongQuestionIndex: 0,
+  khoiDongAnsweredCount: 0,
+  khoiDongStarted: false,
   soundEnabled: true,
   ambienceEnabled: false,
   log: [],
@@ -74,8 +82,22 @@ export const useGameStore = create<GameStore>()(
       ...initialState,
 
       setRound: (round) => {
-        set({ currentRound: round, selectedQuestionId: null, currentQuestion: null });
-        broadcastState({ currentRound: round });
+        set({
+          currentRound: round,
+          selectedQuestionId: null,
+          currentQuestion: null,
+          khoiDongActivePlayerId: null,
+          khoiDongQuestionIndex: 0,
+          khoiDongAnsweredCount: 0,
+          khoiDongStarted: false,
+        });
+        broadcastState({
+          currentRound: round,
+          khoiDongActivePlayerId: null,
+          khoiDongQuestionIndex: 0,
+          khoiDongAnsweredCount: 0,
+          khoiDongStarted: false,
+        });
       },
 
       selectQuestion: (questionId) => {
@@ -278,6 +300,103 @@ export const useGameStore = create<GameStore>()(
 
       setSelectedPlayer: (playerId) => {
         set({ selectedPlayerId: playerId });
+      },
+
+      // Khởi động actions
+      setKhoiDongPlayer: (playerId) => {
+        set({ khoiDongActivePlayerId: playerId });
+        broadcastState({ khoiDongActivePlayerId: playerId });
+      },
+
+      startKhoiDong: () => {
+        const state = get();
+        if (state.currentRound !== "khoi-dong" || !state.khoiDongActivePlayerId) return;
+
+        const khoiDongQuestions = questions["khoi-dong"];
+        if (khoiDongQuestions.length === 0) return;
+
+        const firstQuestion = khoiDongQuestions[0];
+        set({
+          khoiDongStarted: true,
+          khoiDongQuestionIndex: 0,
+          khoiDongAnsweredCount: 0,
+          selectedQuestionId: firstQuestion.id,
+          currentQuestion: firstQuestion,
+          gameStatus: "question-open",
+        });
+        get().addLogEntry(`Bắt đầu vòng Khởi động - Thí sinh ${state.khoiDongActivePlayerId}`);
+        broadcastState({
+          khoiDongStarted: true,
+          khoiDongQuestionIndex: 0,
+          khoiDongAnsweredCount: 0,
+          selectedQuestionId: firstQuestion.id,
+          currentQuestion: firstQuestion,
+          gameStatus: "question-open",
+        });
+      },
+
+      markKhoiDongAnswer: (isCorrect) => {
+        const state = get();
+        if (state.currentRound !== "khoi-dong" || !state.khoiDongStarted || !state.khoiDongActivePlayerId) return;
+        if (state.khoiDongAnsweredCount >= 12) return; // Tối đa 12 câu
+
+        if (isCorrect) {
+          // Trả lời đúng: +10 điểm, tự động chuyển câu tiếp
+          get().scoreAdd(state.khoiDongActivePlayerId, 10);
+          get().addLogEntry(`Thí sinh ${state.khoiDongActivePlayerId} trả lời đúng +10 điểm`);
+
+          // Trigger flash and confetti
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("flash", { detail: "correct" }));
+            window.dispatchEvent(new CustomEvent("confetti"));
+          }
+
+          // Tự động chuyển câu hỏi tiếp theo
+          const khoiDongQuestions = questions["khoi-dong"];
+          const newAnsweredCount = state.khoiDongAnsweredCount + 1;
+          const nextIndex = state.khoiDongQuestionIndex + 1;
+
+          // Nếu đã trả lời đủ 12 câu, kết thúc
+          if (newAnsweredCount >= 12) {
+            set({
+              khoiDongAnsweredCount: 12,
+              gameStatus: "answer-revealed",
+            });
+            get().addLogEntry(`Kết thúc vòng Khởi động - Thí sinh ${state.khoiDongActivePlayerId} (12/12 câu)`);
+            broadcastState({
+              khoiDongAnsweredCount: 12,
+              gameStatus: "answer-revealed",
+            });
+            return;
+          }
+
+          // Chuyển câu hỏi tiếp theo (lặp lại nếu hết câu)
+          const questionIndex = nextIndex % khoiDongQuestions.length;
+          const nextQuestion = khoiDongQuestions[questionIndex];
+          
+          set({
+            khoiDongQuestionIndex: nextIndex,
+            khoiDongAnsweredCount: newAnsweredCount,
+            selectedQuestionId: nextQuestion.id,
+            currentQuestion: nextQuestion,
+            gameStatus: "question-open",
+          });
+          broadcastState({
+            khoiDongQuestionIndex: nextIndex,
+            khoiDongAnsweredCount: newAnsweredCount,
+            selectedQuestionId: nextQuestion.id,
+            currentQuestion: nextQuestion,
+            gameStatus: "question-open",
+          });
+        } else {
+          // Trả lời sai: không mất điểm, không chuyển câu, vẫn ở câu hiện tại
+          get().addLogEntry(`Thí sinh ${state.khoiDongActivePlayerId} trả lời sai (không mất điểm)`);
+
+          // Trigger wrong flash
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("flash", { detail: "wrong" }));
+          }
+        }
       },
     }),
     {

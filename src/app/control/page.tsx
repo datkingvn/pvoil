@@ -20,6 +20,8 @@ import {
   Plus,
   Minus,
   RotateCw,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 
 export default function ControlPage() {
@@ -33,6 +35,10 @@ export default function ControlPage() {
     timerRunning,
     players,
     selectedPlayerId,
+    khoiDongActivePlayerId,
+    khoiDongQuestionIndex,
+    khoiDongAnsweredCount,
+    khoiDongStarted,
     setRound,
     selectQuestion,
     openQuestion,
@@ -46,6 +52,9 @@ export default function ControlPage() {
     scoreSet,
     setSelectedPlayer,
     resetGame,
+    setKhoiDongPlayer,
+    startKhoiDong,
+    markKhoiDongAnswer,
   } = useGameStore();
 
   // Hotkeys
@@ -117,28 +126,69 @@ export default function ControlPage() {
               </div>
             </div>
 
-            {currentRound && (
+            {currentRound === "khoi-dong" ? (
               <div className="bg-gray-800 rounded-lg p-4">
-                <h2 className="text-xl font-bold mb-4">Danh sách câu hỏi</h2>
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {currentRoundQuestions.map((q) => (
+                <h2 className="text-xl font-bold mb-4">Chọn đội thi</h2>
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  {players.map((player) => (
                     <button
-                      key={q.id}
-                      onClick={() => selectQuestion(q.id)}
-                      className={`w-full p-3 rounded-lg text-left transition-all ${
-                        selectedQuestionId === q.id
-                          ? "bg-neon-purple text-white"
+                      key={player.id}
+                      onClick={() => setKhoiDongPlayer(player.id)}
+                      className={`p-3 rounded-lg font-semibold transition-all ${
+                        khoiDongActivePlayerId === player.id
+                          ? "bg-neon-blue text-black"
                           : "bg-gray-700 hover:bg-gray-600"
                       }`}
                     >
-                      <div className="font-semibold">{q.text.substring(0, 40)}...</div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        {q.points} điểm • {q.timeLimitSec}s
-                      </div>
+                      {player.id}: {player.name}
                     </button>
                   ))}
                 </div>
+                {khoiDongActivePlayerId && (
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-400 mb-2">
+                      Đã trả lời: {khoiDongAnsweredCount} / 12 câu
+                    </div>
+                    {!khoiDongStarted ? (
+                      <button
+                        onClick={startKhoiDong}
+                        className="w-full p-3 bg-neon-green text-black rounded-lg font-semibold hover:bg-neon-green/80 flex items-center justify-center gap-2"
+                      >
+                        <Play className="w-5 h-5" />
+                        Bắt đầu
+                      </button>
+                    ) : (
+                      <div className="text-sm text-neon-green font-semibold">
+                        Đang thi: {players.find((p) => p.id === khoiDongActivePlayerId)?.name}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
+            ) : (
+              currentRound && (
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h2 className="text-xl font-bold mb-4">Danh sách câu hỏi</h2>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {currentRoundQuestions.map((q) => (
+                      <button
+                        key={q.id}
+                        onClick={() => selectQuestion(q.id)}
+                        className={`w-full p-3 rounded-lg text-left transition-all ${
+                          selectedQuestionId === q.id
+                            ? "bg-neon-purple text-white"
+                            : "bg-gray-700 hover:bg-gray-600"
+                        }`}
+                      >
+                        <div className="font-semibold">{q.text.substring(0, 40)}...</div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {q.points} điểm • {q.timeLimitSec}s
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
             )}
           </div>
 
@@ -165,40 +215,73 @@ export default function ControlPage() {
             <div className="bg-gray-800 rounded-lg p-4">
               <h2 className="text-xl font-bold mb-4">Điều khiển</h2>
               <div className="space-y-2">
-                <button
-                  onClick={openQuestion}
-                  disabled={!currentQuestion || gameStatus !== "waiting"}
-                  className="w-full p-3 bg-neon-blue text-black rounded-lg font-semibold hover:bg-neon-blue/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  <Eye className="w-5 h-5" />
-                  Mở câu hỏi (O)
-                </button>
+                {currentRound === "khoi-dong" && khoiDongStarted ? (
+                  <>
+                    <div className="text-sm text-gray-400 mb-2 text-center">
+                      Câu {khoiDongQuestionIndex + 1} / {Math.min(12, questions["khoi-dong"].length)}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => markKhoiDongAnswer(true)}
+                        disabled={khoiDongAnsweredCount >= 12}
+                        className="p-4 bg-neon-green text-black rounded-lg font-semibold hover:bg-neon-green/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle className="w-5 h-5" />
+                        Đúng (+10)
+                      </button>
+                      <button
+                        onClick={() => markKhoiDongAnswer(false)}
+                        disabled={khoiDongAnsweredCount >= 12}
+                        className="p-4 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <XCircle className="w-5 h-5" />
+                        Sai
+                      </button>
+                    </div>
+                    {khoiDongAnsweredCount >= 12 && (
+                      <div className="text-center text-neon-yellow font-semibold mt-2">
+                        Đã hoàn thành 12 câu!
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={openQuestion}
+                      disabled={!currentQuestion || gameStatus !== "waiting"}
+                      className="w-full p-3 bg-neon-blue text-black rounded-lg font-semibold hover:bg-neon-blue/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <Eye className="w-5 h-5" />
+                      Mở câu hỏi (O)
+                    </button>
 
-                <button
-                  onClick={lockBuzz}
-                  disabled={gameStatus !== "question-open"}
-                  className="w-full p-3 bg-neon-yellow text-black rounded-lg font-semibold hover:bg-neon-yellow/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  <Lock className="w-5 h-5" />
-                  Khóa chuông (L)
-                </button>
+                    <button
+                      onClick={lockBuzz}
+                      disabled={gameStatus !== "question-open"}
+                      className="w-full p-3 bg-neon-yellow text-black rounded-lg font-semibold hover:bg-neon-yellow/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <Lock className="w-5 h-5" />
+                      Khóa chuông (L)
+                    </button>
 
-                <button
-                  onClick={revealAnswer}
-                  disabled={gameStatus === "waiting" || gameStatus === "answer-revealed"}
-                  className="w-full p-3 bg-neon-green text-black rounded-lg font-semibold hover:bg-neon-green/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  <Eye className="w-5 h-5" />
-                  Hiện đáp án (R)
-                </button>
+                    <button
+                      onClick={revealAnswer}
+                      disabled={gameStatus === "waiting" || gameStatus === "answer-revealed"}
+                      className="w-full p-3 bg-neon-green text-black rounded-lg font-semibold hover:bg-neon-green/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <Eye className="w-5 h-5" />
+                      Hiện đáp án (R)
+                    </button>
 
-                <button
-                  onClick={nextQuestion}
-                  className="w-full p-3 bg-neon-purple text-white rounded-lg font-semibold hover:bg-neon-purple/80 flex items-center justify-center gap-2"
-                >
-                  <ArrowRight className="w-5 h-5" />
-                  Câu tiếp theo (N)
-                </button>
+                    <button
+                      onClick={nextQuestion}
+                      className="w-full p-3 bg-neon-purple text-white rounded-lg font-semibold hover:bg-neon-purple/80 flex items-center justify-center gap-2"
+                    >
+                      <ArrowRight className="w-5 h-5" />
+                      Câu tiếp theo (N)
+                    </button>
+                  </>
+                )}
 
                 <div className="border-t border-gray-700 my-4" />
 

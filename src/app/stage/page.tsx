@@ -22,6 +22,9 @@ export default function StagePage() {
     players,
     soundEnabled,
     ambienceEnabled,
+    khoiDongStarted,
+    khoiDongActivePlayerId,
+    khoiDongAnsweredCount,
     toggleSound,
     toggleAmbience,
   } = useGameStore();
@@ -134,17 +137,34 @@ export default function StagePage() {
           ))}
         </div>
 
-        {/* Buzz Buttons Row */}
-        <div className="grid grid-cols-4 gap-4">
-          {players.map((player) => (
-            <div key={player.id} className="flex justify-center">
-              <BuzzButton
-                playerId={player.id}
-                disabled={gameStatus !== "question-open" || player.status !== "ready"}
-              />
+        {/* Buzz Buttons Row - Ẩn khi đang ở vòng Khởi động */}
+        {!(currentRound === "khoi-dong" && khoiDongStarted) && (
+          <div className="grid grid-cols-4 gap-4">
+            {players.map((player) => (
+              <div key={player.id} className="flex justify-center">
+                <BuzzButton
+                  playerId={player.id}
+                  disabled={gameStatus !== "question-open" || player.status !== "ready"}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Hiển thị thông tin vòng Khởi động */}
+        {currentRound === "khoi-dong" && khoiDongStarted && (
+          <div className="bg-neon-blue/20 border-2 border-neon-blue rounded-xl p-6 text-center">
+            <div className="text-2xl font-bold text-neon-blue mb-2">
+              Vòng Khởi động - {players.find((p) => p.id === khoiDongActivePlayerId)?.name}
             </div>
-          ))}
-        </div>
+            <div className="text-lg text-gray-300">
+              Đã trả lời: {khoiDongAnsweredCount} / 12 câu
+            </div>
+            <div className="text-sm text-gray-400 mt-2">
+              MC sẽ chấm điểm trực tiếp
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
