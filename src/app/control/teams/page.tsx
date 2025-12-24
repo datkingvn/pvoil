@@ -181,7 +181,7 @@ export default function TeamsManagementPage() {
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setShowModal(false);
-              setError("");
+              setFormData({ teamName: "", username: "", password: "" });
             }
           }}
         >
