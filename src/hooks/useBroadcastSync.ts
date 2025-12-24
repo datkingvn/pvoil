@@ -38,7 +38,8 @@ export function useBroadcastSync() {
     const handleMessage = (event: MessageEvent) => {
       if (event.data.type === "state-update") {
         const partialState = event.data.state as Partial<GameState>;
-        useGameStore.setState(partialState);
+        // Use functional update to ensure state is properly merged
+        useGameStore.setState((state) => ({ ...state, ...partialState }));
       }
     };
 

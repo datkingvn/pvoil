@@ -36,6 +36,7 @@ export default function ControlPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const lastCheckedRoundRef = useRef<RoundType | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastToastRoundRef = useRef<RoundType | null>(null);
 
   const {
     currentRound,
@@ -107,12 +108,14 @@ export default function ControlPage() {
         ? khoiDongPackages.some((pkg) => pkg.length > 0)
         : questions[currentRound]?.length > 0;
 
-      if (!hasQuestions && currentRound === lastCheckedRoundRef.current) {
+      // Only show toast if we haven't shown it for this round yet, or if questions changed
+      if (!hasQuestions && currentRound === lastCheckedRoundRef.current && currentRound !== lastToastRoundRef.current) {
         // Clear any existing toast timeout
         if (toastTimeoutRef.current) {
           clearTimeout(toastTimeoutRef.current);
         }
         
+        lastToastRoundRef.current = currentRound;
         setToast({
           message: `Chưa có câu hỏi nào cho vòng ${roundNames[currentRound]}. Vui lòng thêm câu hỏi trong trang Quản lý câu hỏi.`,
           type: "error",
@@ -122,13 +125,18 @@ export default function ControlPage() {
           setToast(null);
           toastTimeoutRef.current = null;
         }, 5000);
-      } else if (hasQuestions && toast?.type === "error" && toast.message.includes(roundNames[currentRound] || "")) {
-        // Clear toast nếu đã có câu hỏi
+      } else if (hasQuestions && currentRound === lastToastRoundRef.current) {
+        // Clear toast nếu đã có câu hỏi cho round đã hiển thị toast
+        lastToastRoundRef.current = null;
         if (toastTimeoutRef.current) {
           clearTimeout(toastTimeoutRef.current);
+          toastTimeoutRef.current = null;
         }
         setToast(null);
       }
+    } else {
+      // Reset toast round ref when no round is selected
+      lastToastRoundRef.current = null;
     }
     
     // Cleanup timeout on unmount
@@ -137,7 +145,7 @@ export default function ControlPage() {
         clearTimeout(toastTimeoutRef.current);
       }
     };
-  }, [currentRound, khoiDongPackages, questions, toast]);
+  }, [currentRound, khoiDongPackages, questions]);
 
   // Hotkeys
   useHotkeys("space", (e) => {
@@ -542,7 +550,8 @@ export default function ControlPage() {
               </div>
             </div>
 
-            {/* Score Control */}
+            {/* Score Control - Ẩn trong phần thi khởi động */}
+            {currentRound !== "khoi-dong" && (
             <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
               <h2 className="text-xl font-bold mb-4 text-white">Chấm điểm</h2>
               <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -613,6 +622,7 @@ export default function ControlPage() {
                 ))}
               </div>
             </div>
+            )}
 
             {/* Reset */}
             <button

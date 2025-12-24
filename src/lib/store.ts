@@ -75,6 +75,7 @@ if (typeof window !== "undefined") {
 const broadcastState = (state: Partial<GameState>) => {
   if (broadcastChannel) {
     try {
+      // BroadcastChannel uses structured clone algorithm, so it handles serialization automatically
       broadcastChannel.postMessage({ type: "state-update", state });
     } catch (e) {
       console.warn("Failed to broadcast state", e);
