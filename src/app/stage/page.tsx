@@ -407,7 +407,7 @@ export default function StagePage() {
             >
               <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
                 <div className="text-white text-3xl font-bold mb-6 tracking-wider">
-                  THACO
+                  PVOIL VŨNG ÁNG
                 </div>
 
                 <div className="flex gap-4 justify-center items-end flex-1 w-full max-w-5xl px-4">
