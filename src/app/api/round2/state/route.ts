@@ -7,7 +7,7 @@ import {
   setRound2Teams,
   resetRound2GameState,
 } from "@/lib/round2/store";
-import { Round2Config, Round2GameState, Round2Team } from "@/lib/round2/types";
+import { Round2Config, Round2GameState, Round2Team, Round2TileStatus } from "@/lib/round2/types";
 import { normalizeKeyword, countKeywordLetters, countAnswerWords } from "@/lib/round2/helpers";
 import connectDB from "@/lib/mongodb";
 import Team from "@/models/Team";
