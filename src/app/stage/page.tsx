@@ -10,6 +10,8 @@ import { TeamCard } from "@/components/TeamCard";
 import { FlashOverlay } from "@/components/FlashOverlay";
 import { Confetti } from "@/components/Confetti";
 import { Logo } from "@/components/Logo";
+import { TileGrid } from "@/components/round2/TileGrid";
+import { ObstacleDisplay } from "@/components/round2/ObstacleDisplay";
 import { roundNames } from "@/lib/questions";
 import {
   Maximize2,
@@ -110,6 +112,8 @@ export default function StagePage() {
   useBroadcastSync(); // Sync với các tab cùng máy
   useGameWebSocket("stage"); // Sync qua WebSocket với các thiết bị khác
   const { team, logout } = useAuth();
+  const [round2State, setRound2State] = useState<any>(null);
+  const [round2AnswerInput, setRound2AnswerInput] = useState("");
 
   const {
     currentRound,
@@ -127,6 +131,110 @@ export default function StagePage() {
     toggleAmbience,
     loadTeams,
   } = useGameStore();
+
+  // Load round2 state khi ở vòng 2
+  useEffect(() => {
+    if (currentRound === "vuot-chuong-ngai-vat") {
+      const loadRound2State = async () => {
+        try {
+          const res = await fetch("/api/round2/state");
+          const data = await res.json();
+          setRound2State(data);
+        } catch (error) {
+          console.error("Error loading round2 state:", error);
+        }
+      };
+      loadRound2State();
+      // Poll state mỗi 500ms để sync real-time
+      const interval = setInterval(loadRound2State, 500);
+      return () => clearInterval(interval);
+    } else {
+      setRound2State(null);
+    }
+  }, [currentRound]);
+
+  // Timer countdown cho round2
+  useEffect(() => {
+    if (currentRound !== "vuot-chuong-ngai-vat") return;
+    if (!round2State?.gameState) return;
+    if (round2State.gameState.status !== "question_open") return;
+    if (round2State.gameState.timeLeft <= 0) {
+      // Hết thời gian => tự động submit với answer rỗng
+      const handleTimeout = async () => {
+        try {
+          await fetch("/api/round2/state", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "setGameState",
+              data: {
+                lastAnswerInput: "",
+                status: "waiting_confirmation",
+              },
+            }),
+          });
+        } catch (error) {
+          console.error("Error handling timeout:", error);
+        }
+      };
+      handleTimeout();
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setRound2State((prev: any) => {
+        if (!prev || prev.gameState.status !== "question_open") {
+          clearInterval(timer);
+          return prev;
+        }
+
+        const newTimeLeft = prev.gameState.timeLeft - 1;
+        if (newTimeLeft <= 0) {
+          clearInterval(timer);
+          // Hết thời gian => tự động submit với answer rỗng
+          const handleTimeout = async () => {
+            try {
+              await fetch("/api/round2/state", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "setGameState",
+                  data: {
+                    lastAnswerInput: "",
+                    status: "waiting_confirmation",
+                  },
+                }),
+              });
+            } catch (error) {
+              console.error("Error handling timeout:", error);
+            }
+          };
+          handleTimeout();
+          return prev;
+        }
+
+        // Update local state immediately for UI responsiveness
+        const updatedState = {
+          ...prev,
+          gameState: { ...prev.gameState, timeLeft: newTimeLeft },
+        };
+
+        // Sync với server mỗi giây
+        fetch("/api/round2/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "setGameState",
+            data: { timeLeft: newTimeLeft },
+          }),
+        }).catch(console.error);
+
+        return updatedState;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [currentRound, round2State?.gameState?.status, round2State?.gameState?.timeLeft]);
 
   useEffect(() => {
     loadTeams();
@@ -322,74 +430,182 @@ export default function StagePage() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
           >
-            {/* Top-Left: Bảng game 4 ô số + ô trung tâm */}
+            {/* Top-Left: Tile Grid */}
+            {round2State?.config ? (
+              <div className="bg-slate-950/95 rounded-xl p-4 border border-slate-700/50 relative overflow-hidden">
+                <TileGrid
+                  imageUrl={round2State.config.imageOriginalUrl}
+                  tiles={round2State.config.questions.map((q: any) => ({
+                    id: q.id,
+                    status: q.tileStatus,
+                  }))}
+                />
+              </div>
+            ) : (
+              <div className="bg-slate-950/95 rounded-xl p-4 border border-slate-700/50 relative overflow-hidden flex items-center justify-center">
+                <div className="text-gray-400">Chờ MC tạo config...</div>
+              </div>
+            )}
+
+            {/* Top-Right: Obstacle Display */}
+            {round2State?.config ? (
+              <ObstacleDisplay
+                keywordLength={round2State.config.keywordLength}
+                answerWordCounts={round2State.config.questions.map((q: any) => q.answerWordCount)}
+              />
+            ) : (
+              <ObstaclePuzzleUI />
+            )}
+
+            {/* Bottom-Left: Câu hỏi + Timer + Input đáp án */}
             <div
-              className="bg-slate-950/95 rounded-xl p-4 border border-slate-700/50 relative overflow-hidden"
+              className="bg-slate-950/95 rounded-xl p-6 border-2 border-white/90 relative overflow-hidden flex flex-col"
               style={{
                 backgroundImage: `linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
                   linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px)`,
                 backgroundSize: "40px 40px",
               }}
             >
-              <div className="absolute top-3 left-4 text-white font-bold text-sm z-20">
-                Trực tiếp
-              </div>
-              <div className="h-full flex items-center justify-center pt-8">
-                <div className="relative w-full h-full max-w-md max-h-md flex items-center justify-center">
-                  <div className="grid grid-cols-2 gap-4 w-full h-full">
-                    {[1, 2, 3, 4].map((num) => (
-                      <div
-                        key={num}
-                        className="bg-blue-950 border-2 border-blue-700 rounded-xl flex items-center justify-center text-white text-8xl font-bold shadow-2xl hover:border-blue-500 transition-colors"
-                        style={{
-                          background:
-                            "linear-gradient(135deg, rgba(30, 58, 138, 0.9), rgba(30, 64, 175, 0.9))",
-                        }}
-                      >
-                        {num}
-                      </div>
-                    ))}
+              <div className="flex-1 mb-4 pr-4 overflow-y-auto">
+                {round2State?.gameState?.status === "tile_selected" && round2State?.gameState?.activeQuestionId ? (
+                  <div className="text-gray-400 text-lg italic">
+                    Chờ MC bấm "Bắt đầu" để mở câu hỏi...
                   </div>
-
-                  <div
-                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-blue-950 border-2 border-blue-700 rounded-xl flex items-center justify-center shadow-2xl z-10"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, rgba(30, 58, 138, 0.95), rgba(30, 64, 175, 0.95))",
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Top-Right: ✅ UI theo ảnh (chưa có logic) */}
-            <ObstaclePuzzleUI />
-
-            {/* Bottom-Left: Câu hỏi + Timer mock */}
-            <div
-              className="bg-slate-950/95 rounded-xl p-6 border-2 border-white/90 relative overflow-hidden"
-              style={{
-                backgroundImage: `linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-                  linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px)`,
-                backgroundSize: "40px 40px",
-              }}
-            >
-              <div className="h-full mb-28 pr-4">
-                {currentQuestion ? (
+                ) : round2State?.gameState?.status === "question_open" && round2State?.gameState?.activeQuestionId ? (
                   <div className="text-white text-lg leading-relaxed font-medium">
-                    {currentQuestion.text}
+                    {round2State.config?.questions.find(
+                      (q: any) => q.id === round2State.gameState.activeQuestionId
+                    )?.questionText || "Đang tải câu hỏi..."}
+                  </div>
+                ) : round2State?.gameState?.status === "waiting_confirmation" ? (
+                  <div className="text-yellow-400 text-lg font-semibold">
+                    ⏳ Đã gửi đáp án. Chờ MC xác nhận...
+                  </div>
+                ) : round2State?.gameState?.status === "answered_correct" ? (
+                  <div className="text-green-400 text-lg font-semibold">
+                    ✓ Trả lời đúng! Chờ MC xác nhận...
+                  </div>
+                ) : round2State?.gameState?.status === "answered_wrong" ? (
+                  <div className="text-red-400 text-lg font-semibold">
+                    ✗ Trả lời sai. Chờ MC xác nhận...
+                  </div>
+                ) : round2State?.gameState?.status === "round_finished" ? (
+                  <div className="text-neon-green text-lg font-bold">
+                    🎉 Đã đoán đúng từ khóa! +80 điểm
                   </div>
                 ) : (
                   <div className="text-gray-400 text-lg italic">
-                    Chờ câu hỏi...
+                    Chờ MC chọn tile...
                   </div>
                 )}
               </div>
 
-              <div className="absolute bottom-6 left-6 flex items-center gap-2">
-                <Clock className="w-6 h-6 text-white/80" />
-                <div className="text-white text-5xl font-mono font-bold tabular-nums">
-                  09:25
+              {/* Input đáp án - chỉ hiển thị khi question_open và chưa gửi đáp án */}
+              {round2State?.gameState?.status === "question_open" && round2State?.gameState?.activeQuestionId && !round2State?.gameState?.lastAnswerInput && (
+                <div className="mb-4 space-y-2">
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!round2AnswerInput.trim()) return;
+
+                      try {
+                        const res = await fetch("/api/round2/state", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            action: "setGameState",
+                            data: {
+                              lastAnswerInput: round2AnswerInput.trim(),
+                              status: "waiting_confirmation",
+                            },
+                          }),
+                        });
+                        if (res.ok) {
+                          setRound2AnswerInput("");
+                        }
+                      } catch (error) {
+                        console.error("Error submitting answer:", error);
+                      }
+                    }}
+                    className="flex gap-2"
+                  >
+                    <input
+                      type="text"
+                      value={round2AnswerInput}
+                      onChange={(e) => setRound2AnswerInput(e.target.value)}
+                      placeholder="Nhập câu trả lời..."
+                      disabled={round2State?.gameState?.status !== "question_open"}
+                      className="flex-1 px-4 py-3 bg-slate-800/80 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neon-blue disabled:opacity-50"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!round2AnswerInput.trim() || round2State?.gameState?.status !== "question_open"}
+                      className="px-6 py-3 bg-neon-blue hover:bg-neon-blue/80 text-white font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Gửi
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Đồng hồ cát dạng thanh đứng dọc */}
+              <div className="absolute bottom-6 left-6 flex items-end gap-3">
+                <div className="flex flex-col items-center gap-2">
+                  {/* Thanh đồng hồ cát */}
+                  <div className="relative w-16 h-32 bg-slate-800/60 rounded-lg border-2 border-slate-600/50 overflow-hidden">
+                    {/* Thanh progress tụt từ trên xuống */}
+                    {round2State?.gameState?.timeLeft !== undefined && round2State.gameState.timeLeft > 0 ? (
+                      <div
+                        className={`absolute bottom-0 left-0 right-0 transition-all duration-1000 ease-linear ${
+                          round2State.gameState.timeLeft <= 5
+                            ? "bg-gradient-to-t from-red-500 to-red-400"
+                            : round2State.gameState.timeLeft <= 10
+                            ? "bg-gradient-to-t from-yellow-500 to-yellow-400"
+                            : "bg-gradient-to-t from-neon-blue to-cyan-400"
+                        }`}
+                        style={{
+                          height: `${(round2State.gameState.timeLeft / 15) * 100}%`,
+                          boxShadow: round2State.gameState.timeLeft <= 5
+                            ? "0 0 20px rgba(239, 68, 68, 0.8)"
+                            : round2State.gameState.timeLeft <= 10
+                            ? "0 0 15px rgba(234, 179, 8, 0.6)"
+                            : "0 0 10px rgba(0, 240, 255, 0.5)",
+                        }}
+                      />
+                    ) : null}
+                    {/* Vạch chia */}
+                    <div className="absolute inset-0 flex flex-col justify-between py-1">
+                      {[0, 1, 2, 3, 4].map((i) => (
+                        <div
+                          key={i}
+                          className="h-px bg-white/20"
+                          style={{ marginTop: `${i * 25}%` }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  {/* Số giây còn lại */}
+                  <div
+                    className={`text-2xl font-mono font-bold tabular-nums ${
+                      round2State?.gameState?.timeLeft && round2State.gameState.timeLeft <= 5
+                        ? "text-red-400"
+                        : round2State?.gameState?.timeLeft && round2State.gameState.timeLeft <= 10
+                        ? "text-yellow-400"
+                        : "text-neon-blue"
+                    }`}
+                    style={{
+                      textShadow:
+                        round2State?.gameState?.timeLeft && round2State.gameState.timeLeft <= 5
+                          ? "0 0 10px rgba(239, 68, 68, 0.8)"
+                          : round2State?.gameState?.timeLeft && round2State.gameState.timeLeft <= 10
+                          ? "0 0 8px rgba(234, 179, 8, 0.6)"
+                          : "0 0 8px rgba(0, 240, 255, 0.5)",
+                    }}
+                  >
+                    {round2State?.gameState?.timeLeft !== undefined
+                      ? String(round2State.gameState.timeLeft).padStart(2, "0")
+                      : "00"}
+                  </div>
                 </div>
               </div>
             </div>

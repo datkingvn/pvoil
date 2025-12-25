@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useGameStore } from "@/lib/store";
 import { useBroadcastSync } from "@/hooks/useBroadcastSync";
@@ -39,6 +39,8 @@ export default function ControlPage() {
   const lastCheckedRoundRef = useRef<RoundType | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastToastRoundRef = useRef<RoundType | null>(null);
+  const [showRound2ConfirmModal, setShowRound2ConfirmModal] = useState(false);
+  const [round2State, setRound2State] = useState<any>(null);
 
   const {
     currentRound,
@@ -81,6 +83,27 @@ export default function ControlPage() {
   useEffect(() => {
     loadTeams();
   }, [loadTeams]);
+
+  // Load round2 state khi ở vòng 2
+  useEffect(() => {
+    if (currentRound === "vuot-chuong-ngai-vat") {
+      const loadRound2State = async () => {
+        try {
+          const res = await fetch("/api/round2/state");
+          const data = await res.json();
+          setRound2State(data);
+        } catch (error) {
+          console.error("Error loading round2 state:", error);
+        }
+      };
+      loadRound2State();
+      // Poll state mỗi 1s để sync
+      const interval = setInterval(loadRound2State, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setRound2State(null);
+    }
+  }, [currentRound]);
 
   // Listen for questions updated event from questions management page
   useEffect(() => {
@@ -251,7 +274,14 @@ export default function ControlPage() {
                 {(Object.keys(roundNames) as RoundType[]).map((round) => (
                   <button
                     key={round}
-                    onClick={() => setRound(round)}
+                    onClick={() => {
+                      if (round === "vuot-chuong-ngai-vat" && currentRound !== "vuot-chuong-ngai-vat") {
+                        // Hiển thị modal xác nhận khi chuyển sang vòng 2
+                        setShowRound2ConfirmModal(true);
+                      } else {
+                        setRound(round);
+                      }
+                    }}
                     className={`p-3 rounded-lg text-sm font-semibold transition-all ${
                       currentRound === round
                         ? "bg-neon-blue text-white border-2 border-neon-blue shadow-lg shadow-neon-blue/50"
@@ -264,7 +294,334 @@ export default function ControlPage() {
               </div>
             </div>
 
-            {currentRound === "khoi-dong" ? (
+            {currentRound === "vuot-chuong-ngai-vat" ? (
+              <div className="bg-gray-800 rounded-lg p-4 space-y-4 border border-gray-700">
+                <h2 className="text-xl font-bold mb-4 text-white">Vòng 2: Vượt chướng ngại vật</h2>
+                
+                {/* Chọn đội thi - Bước 1 */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-2 text-white">Bước 1: Chọn đội thi</h3>
+                  {!round2State?.teams || round2State.teams.length === 0 ? (
+                    <div className="text-gray-400 text-sm">Đang tải danh sách đội...</div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto">
+                      {round2State.teams.map((team: any) => (
+                        <button
+                          key={team.id}
+                          onClick={async () => {
+                            try {
+                              const res = await fetch("/api/round2/state", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  action: "setGameState",
+                                  data: { activeTeamId: team.id },
+                                }),
+                              });
+                              // Reload state ngay sau khi chọn đội
+                              if (res.ok) {
+                                const data = await res.json();
+                                setRound2State(data.state);
+                              }
+                            } catch (error) {
+                              console.error("Error selecting team:", error);
+                            }
+                          }}
+                          className={`p-3 rounded-lg font-semibold transition-all text-left border-2 ${
+                            round2State?.gameState?.activeTeamId === team.id
+                              ? "bg-neon-blue text-white border-neon-blue shadow-lg shadow-neon-blue/50"
+                              : "bg-gray-700 text-gray-200 hover:bg-gray-600 border-gray-600"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold">{team.name}</span>
+                            <span className="text-sm opacity-80">{team.score} điểm</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Chọn tile - Bước 2 */}
+                {round2State?.gameState?.activeTeamId && (
+                  <div>
+                    {!round2State?.config ? (
+                      <div className="p-4 bg-yellow-900/30 border border-yellow-700 rounded-lg">
+                        <div className="text-yellow-400 text-sm font-semibold mb-1">
+                          ⚠️ Chưa có config
+                        </div>
+                        <div className="text-gray-400 text-xs">
+                          Vui lòng tạo config trong trang Quản lý câu hỏi trước
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                    <h3 className="text-lg font-semibold mb-2 text-white">Bước 2: Chọn tile (1-4)</h3>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[1, 2, 3, 4].map((tileId) => {
+                        const question = round2State.config.questions.find((q: any) => q.id === tileId);
+                        const isAvailable = question?.tileStatus === "hidden";
+                        const isSelected = round2State.gameState?.activeQuestionId === tileId;
+                        const isRevealed = question?.tileStatus === "revealed";
+                        const isWrong = question?.tileStatus === "wrong";
+                        
+                        return (
+                          <button
+                            key={tileId}
+                            onClick={async () => {
+                              if (!isAvailable) return;
+                              
+                              // KHÔNG thay đổi tileStatus, chỉ set gameState
+                              // Tile vẫn giữ status "hidden" cho đến khi MC xác nhận đúng
+
+                              try {
+                                // Chỉ set tile_selected, không tự động mở câu hỏi
+                                const res = await fetch("/api/round2/state", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    action: "setGameState",
+                                    data: {
+                                      status: "tile_selected",
+                                      activeQuestionId: tileId,
+                                      timeLeft: 15,
+                                    },
+                                  }),
+                                });
+                                // Reload state ngay
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setRound2State(data.state);
+                                }
+                              } catch (error) {
+                                console.error("Error selecting tile:", error);
+                              }
+                            }}
+                            disabled={!isAvailable}
+                            className={`p-4 rounded-lg font-bold transition-all border-2 ${
+                              isSelected
+                                ? "bg-neon-purple text-white border-neon-purple shadow-lg shadow-neon-purple/50"
+                                : isRevealed
+                                ? "bg-green-700/50 text-green-300 border-green-600 cursor-not-allowed"
+                                : isWrong
+                                ? "bg-red-700/50 text-red-300 border-red-600 cursor-not-allowed"
+                                : isAvailable
+                                ? "bg-gray-700 text-gray-200 hover:bg-gray-600 border-gray-600"
+                                : "bg-gray-800/50 text-gray-500 border-gray-700 opacity-60 cursor-not-allowed"
+                            }`}
+                            title={
+                              isRevealed
+                                ? "Tile đã được mở"
+                                : isWrong
+                                ? "Tile đã trả lời sai"
+                                : isAvailable
+                                ? `Chọn tile ${tileId}`
+                                : "Tile không khả dụng"
+                            }
+                          >
+                            <div className="text-2xl mb-1">{tileId}</div>
+                            <div className="text-xs">
+                              {isRevealed ? "✓" : isWrong ? "✗" : isAvailable ? "Chọn" : "Đã dùng"}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Hiển thị câu hỏi đã chọn và nút Bắt đầu */}
+                    {round2State.gameState?.status === "tile_selected" && round2State.gameState?.activeQuestionId && (
+                      <div className="mt-4 p-3 bg-gray-700 rounded-lg border border-gray-600">
+                        <div className="text-sm text-gray-400 mb-1">Tile đã chọn:</div>
+                        <div className="text-white font-medium mb-3">
+                          {round2State.config.questions.find(
+                            (q: any) => q.id === round2State.gameState.activeQuestionId
+                          )?.questionText || "Đang tải..."}
+                        </div>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const res = await fetch("/api/round2/state", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  action: "setGameState",
+                                  data: {
+                                    status: "question_open",
+                                    timeLeft: 15,
+                                  },
+                                }),
+                              });
+                              // Reload state ngay
+                              if (res.ok) {
+                                const data = await res.json();
+                                setRound2State(data.state);
+                              }
+                            } catch (error) {
+                              console.error("Error starting question:", error);
+                            }
+                          }}
+                          className="w-full px-4 py-2 bg-neon-green text-white rounded-lg font-bold hover:bg-neon-green/80 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Play className="w-5 h-5" />
+                          Bắt đầu (15s)
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Hiển thị câu hỏi đang mở */}
+                    {round2State.gameState?.status === "question_open" && round2State.gameState?.activeQuestionId && (
+                      <div className="mt-4 p-3 bg-gray-700 rounded-lg border border-gray-600">
+                        <div className="text-sm text-gray-400 mb-1">Câu hỏi đang mở:</div>
+                        <div className="text-white font-medium">
+                          {round2State.config.questions.find(
+                            (q: any) => q.id === round2State.gameState.activeQuestionId
+                          )?.questionText || "Đang tải..."}
+                        </div>
+                        <div className="text-sm text-gray-400 mt-2">
+                          Thời gian: {round2State.gameState.timeLeft}s
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Hiển thị đáp án đã gửi và nút xác nhận */}
+                    {round2State.gameState?.status === "waiting_confirmation" && round2State.gameState?.activeQuestionId && (
+                      <div className="mt-4 p-3 bg-gray-700 rounded-lg border border-gray-600">
+                        <div className="text-sm text-gray-400 mb-2">Đáp án đã gửi:</div>
+                        <div className="text-white font-medium mb-3 p-2 bg-gray-800 rounded border border-gray-600 min-h-[60px] flex items-center">
+                          {round2State.gameState?.lastAnswerInput || "Chưa có đáp án"}
+                        </div>
+                        <div className="text-sm text-gray-400 mb-2">Đáp án đúng:</div>
+                        <div className="text-white font-medium mb-3 p-2 bg-gray-800 rounded border border-gray-600 min-h-[60px] flex items-center">
+                          {round2State.config?.questions.find((q: any) => q.id === round2State.gameState?.activeQuestionId)?.answerText || "N/A"}
+                        </div>
+                        <div className="text-sm text-gray-400 mb-2">Xác nhận kết quả:</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={async () => {
+                              const tileId = round2State.gameState.activeQuestionId;
+                              const activeTeamId = round2State.gameState.activeTeamId;
+                              
+                              // Xác nhận đúng → cộng điểm + reveal tile (hiển thị hình ảnh)
+                              const updatedQuestions = round2State.config.questions.map((q: any) =>
+                                q.id === tileId ? { ...q, tileStatus: "revealed" } : q
+                              );
+                              
+                              try {
+                                // Cộng điểm cho đội
+                                if (activeTeamId) {
+                                  await fetch("/api/round2/state", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      action: "updateTeamScore",
+                                      data: { teamId: activeTeamId, delta: 10 },
+                                    }),
+                                  });
+                                }
+                                
+                                // Update config: reveal tile
+                                await fetch("/api/round2/state", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    action: "setConfig",
+                                    data: { ...round2State.config, questions: updatedQuestions },
+                                  }),
+                                });
+                                
+                                // Reset game state về idle
+                                const res = await fetch("/api/round2/state", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    action: "setGameState",
+                                    data: {
+                                      status: "idle",
+                                      activeQuestionId: null,
+                                      lastAnswerInput: "",
+                                    },
+                                  }),
+                                });
+                                // Reload state ngay
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setRound2State(data.state);
+                                }
+                              } catch (error) {
+                                console.error("Error confirming answer:", error);
+                              }
+                            }}
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <CheckCircle className="w-5 h-5" />
+                            Đúng (+10) - Mở hình
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const tileId = round2State.gameState.activeQuestionId;
+                              // Xác nhận sai → wrong tile (vẫn che, không hiển thị hình)
+                              const updatedQuestions = round2State.config.questions.map((q: any) =>
+                                q.id === tileId ? { ...q, tileStatus: "wrong" } : q
+                              );
+                              
+                              try {
+                                // Update config: wrong tile (vẫn che)
+                                await fetch("/api/round2/state", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    action: "setConfig",
+                                    data: { ...round2State.config, questions: updatedQuestions },
+                                  }),
+                                });
+                                
+                                // Reset game state về idle
+                                const res = await fetch("/api/round2/state", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    action: "setGameState",
+                                    data: {
+                                      status: "idle",
+                                      activeQuestionId: null,
+                                      lastAnswerInput: "",
+                                    },
+                                  }),
+                                });
+                                // Reload state ngay
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setRound2State(data.state);
+                                }
+                              } catch (error) {
+                                console.error("Error confirming answer:", error);
+                              }
+                            }}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <XCircle className="w-5 h-5" />
+                            Sai - Giữ che
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Thông tin trạng thái */}
+                {round2State?.gameState && (
+                  <div className="text-sm text-gray-400 mt-4">
+                    Trạng thái: {round2State.gameState.status}
+                    {round2State.gameState.guessedKeywordCorrect && (
+                      <span className="text-green-400 ml-2">✓ Đã đoán đúng keyword</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : currentRound === "khoi-dong" ? (
               <div className="bg-gray-800 rounded-lg p-4 space-y-4 border border-gray-700">
                 <h2 className="text-xl font-bold mb-4 text-white">Vòng 1: Khơi nguồn năng lượng</h2>
                 
@@ -641,7 +998,22 @@ export default function ControlPage() {
 
             {/* Reset */}
             <button
-              onClick={resetGame}
+              onClick={async () => {
+                resetGame();
+                // Reset round2 state nếu đang ở vòng 2
+                if (currentRound === "vuot-chuong-ngai-vat") {
+                  try {
+                    // Reset toàn bộ round2 state (game state + tile status)
+                    await fetch("/api/round2/state", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ action: "resetAll" }),
+                    });
+                  } catch (error) {
+                    console.error("Error resetting round2:", error);
+                  }
+                }
+              }}
               className="w-full p-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 flex items-center justify-center gap-2"
             >
               <RotateCw className="w-5 h-5" />
@@ -663,6 +1035,49 @@ export default function ControlPage() {
           </div>
         </div>
       </div>
+
+      {/* Round 2 Confirmation Modal */}
+      <AnimatePresence>
+        {showRound2ConfirmModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-gray-800 rounded-xl p-6 border-2 border-neon-blue max-w-md w-full shadow-2xl"
+            >
+            <h2 className="text-2xl font-bold text-white mb-4">
+              Xác nhận chuyển sang Vòng 2
+            </h2>
+            <p className="text-gray-300 mb-6">
+              Bạn có chắc chắn đã hoàn thành Vòng 1: Khơi nguồn năng lượng? 
+              Khi xác nhận, màn hình của tất cả các đội thi sẽ tự động chuyển sang Vòng 2.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowRound2ConfirmModal(false)}
+                className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  setRound("vuot-chuong-ngai-vat");
+                  setShowRound2ConfirmModal(false);
+                  setToast({
+                    message: "Đã chuyển sang Vòng 2: Vượt chướng ngại vật",
+                    type: "success",
+                  });
+                }}
+                className="px-6 py-2 bg-neon-blue hover:bg-neon-blue/80 text-white font-semibold rounded-lg transition-colors"
+              >
+                Xác nhận
+              </button>
+            </div>
+          </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

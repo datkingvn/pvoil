@@ -44,7 +44,7 @@ export default function QuestionsPage() {
                     {round === "khoi-dong"
                       ? "4 gói câu hỏi, mỗi gói 12 câu"
                       : round === "vuot-chuong-ngai-vat"
-                      ? "Câu hỏi trắc nghiệm với 4 phương án"
+                      ? "Upload ảnh và tạo 4 câu hỏi cho vòng 2"
                       : round === "tang-toc"
                       ? "Câu hỏi trắc nghiệm nhanh"
                       : "Câu hỏi trắc nghiệm cuối cùng"}
