@@ -1,19 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  getRound2State,
-  setRound2State,
-  setRound2Config,
-  setRound2GameState,
-  setRound2Teams,
-  resetRound2GameState,
-} from "@/lib/round2/store";
-import { Round2Config, Round2GameState, Round2Team, Round2TileStatus, Round2TeamAnswer, Round2BuzzerPress } from "@/lib/round2/types";
+import { Round2Config, Round2GameState, Round2Team, Round2TileStatus, Round2TeamAnswer, Round2BuzzerPress, Round2State } from "@/lib/round2/types";
 import { normalizeKeyword, countKeywordLetters, countAnswerWords } from "@/lib/round2/helpers";
 import connectDB from "@/lib/mongodb";
 import Team from "@/models/Team";
 import Round2ConfigModel from "@/models/Round2Config";
+import Round2GameStateModel from "@/models/Round2GameState";
+import Round2TeamsModel from "@/models/Round2Teams";
 
 export const runtime = "nodejs";
+
+// Helper: Load gameState từ DB
+async function loadGameStateFromDB(): Promise<Round2GameState> {
+  await connectDB();
+  const doc = await Round2GameStateModel.getCurrent();
+  const gameState: Round2GameState = {
+    status: doc.status,
+    activeTeamId: doc.activeTeamId,
+    activeQuestionId: doc.activeQuestionId,
+    timeLeft: doc.timeLeft,
+    lastAnswerInput: doc.lastAnswerInput || "",
+    teamAnswers: doc.teamAnswers || [],
+    guessedKeywordCorrect: doc.guessedKeywordCorrect || false,
+    buzzerPresses: doc.buzzerPresses || [],
+    buzzerTeamId: doc.buzzerTeamId,
+    buzzerTeamName: doc.buzzerTeamName,
+    buzzerTimestamp: doc.buzzerTimestamp,
+    questionStartTime: doc.questionStartTime,
+    questionInitialTime: doc.questionInitialTime,
+  };
+  
+  // Tính toán timeLeft nếu status = "question_open"
+  if (gameState.status === "question_open" && 
+      gameState.questionStartTime !== null && 
+      gameState.questionInitialTime !== null) {
+    const elapsed = Math.floor((Date.now() - gameState.questionStartTime) / 1000);
+    gameState.timeLeft = Math.max(0, gameState.questionInitialTime - elapsed);
+  }
+  
+  return gameState;
+}
+
+// Helper: Save gameState vào DB
+async function saveGameStateToDB(gameState: Partial<Round2GameState>): Promise<void> {
+  await connectDB();
+  await Round2GameStateModel.updateCurrent(gameState);
+}
 
 // Helper: Load teams từ DB và convert sang Round2Team format
 async function loadTeamsFromDB(): Promise<Round2Team[]> {
@@ -31,6 +62,45 @@ async function loadTeamsFromDB(): Promise<Round2Team[]> {
     console.error("Error loading teams:", error);
   }
   return [];
+}
+
+// Helper: Load Round2Teams từ DB (với score và isLocked)
+async function loadRound2TeamsFromDB(): Promise<Round2Team[]> {
+  await connectDB();
+  const doc = await Round2TeamsModel.getCurrent();
+  if (doc.teams && doc.teams.length > 0) {
+    return doc.teams;
+  }
+  // Nếu chưa có, load từ Team model và init
+  return await loadTeamsFromDB();
+}
+
+// Helper: Save Round2Teams vào DB
+async function saveRound2TeamsToDB(teams: Round2Team[]): Promise<void> {
+  await connectDB();
+  await Round2TeamsModel.updateCurrent(teams);
+}
+
+// Helper: Load full state từ DB
+async function loadFullState(): Promise<Round2State> {
+  await connectDB();
+  const config = await loadConfigFromDB();
+  const gameState = await loadGameStateFromDB();
+  let teams = await loadRound2TeamsFromDB();
+  
+  // Nếu teams chưa có trong Round2Teams, init từ Team model
+  if (teams.length === 0) {
+    teams = await loadTeamsFromDB();
+    if (teams.length > 0) {
+      await saveRound2TeamsToDB(teams);
+    }
+  }
+  
+  return {
+    config,
+    gameState,
+    teams,
+  };
 }
 
 // Helper: Map team từ DB (id string) sang Round2Team id (number)
@@ -72,39 +142,31 @@ async function loadConfigFromDB(): Promise<Round2Config | null> {
   return null;
 }
 
-// GET: Lấy state hiện tại
+// GET: Lấy state hiện tại - Load tất cả từ DB
 export async function GET() {
   try {
-    const state = getRound2State();
+    await connectDB();
     
-    // Nếu chưa có config trong memory, thử load từ DB
-    if (!state.config) {
-      const config = await loadConfigFromDB();
-      if (config) {
-        setRound2Config(config);
-      }
-    }
+    // Load tất cả từ DB
+    const config = await loadConfigFromDB();
+    const gameState = await loadGameStateFromDB();
+    let teams = await loadRound2TeamsFromDB();
     
-    // Nếu chưa có teams, load từ DB
-    if (state.teams.length === 0) {
-      const teams = await loadTeamsFromDB();
+    // Nếu teams chưa có trong Round2Teams, init từ Team model
+    if (teams.length === 0) {
+      teams = await loadTeamsFromDB();
       if (teams.length > 0) {
-        setRound2Teams(teams);
+        await saveRound2TeamsToDB(teams);
       }
     }
     
-    const updatedState = getRound2State();
+    const state: Round2State = {
+      config,
+      gameState,
+      teams,
+    };
     
-    // Tính toán timeLeft dựa trên questionStartTime nếu status = "question_open"
-    if (updatedState.gameState.status === "question_open" && 
-        updatedState.gameState.questionStartTime !== null && 
-        updatedState.gameState.questionInitialTime !== null) {
-      const elapsed = Math.floor((Date.now() - updatedState.gameState.questionStartTime) / 1000);
-      const calculatedTimeLeft = Math.max(0, updatedState.gameState.questionInitialTime - elapsed);
-      updatedState.gameState.timeLeft = calculatedTimeLeft;
-    }
-    
-    return NextResponse.json(updatedState);
+    return NextResponse.json(state);
   } catch (error) {
     console.error("Error getting round2 state:", error);
     return NextResponse.json(
@@ -122,148 +184,202 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case "setConfig": {
+        await connectDB();
         const config = data as Round2Config;
-        const currentState = getRound2State();
+        const currentGameState = await loadGameStateFromDB();
+        
         // Nếu đang có activeQuestionId, giữ nguyên game state (đang trong quá trình chơi)
         // Nếu không có activeQuestionId, reset game state (config mới)
-        if (!currentState.gameState.activeQuestionId) {
-          resetRound2GameState();
+        if (!currentGameState.activeQuestionId) {
+          const resetGameState: Round2GameState = {
+            status: "idle",
+            activeTeamId: null,
+            activeQuestionId: null,
+            timeLeft: 15,
+            lastAnswerInput: "",
+            teamAnswers: [],
+            guessedKeywordCorrect: false,
+            buzzerPresses: [],
+            buzzerTeamId: null,
+            buzzerTeamName: null,
+            buzzerTimestamp: null,
+            questionStartTime: null,
+            questionInitialTime: null,
+          };
+          await saveGameStateToDB(resetGameState);
         }
         
-        // Lưu config vào memory
-        setRound2Config(config);
+        // Lưu config vào database
+        await Round2ConfigModel.deleteMany({});
+        await Round2ConfigModel.create({
+          imageOriginalUrl: config.imageOriginalUrl,
+          keywordAnswer: config.keywordAnswer,
+          keywordNormalized: config.keywordNormalized,
+          keywordLength: config.keywordLength,
+          questions: config.questions,
+        });
         
-        // Lưu config vào database để persist
-        try {
-          await connectDB();
-          // Xóa config cũ và tạo mới (chỉ giữ 1 config mới nhất)
-          await Round2ConfigModel.deleteMany({});
-          await Round2ConfigModel.create({
-            imageOriginalUrl: config.imageOriginalUrl,
-            keywordAnswer: config.keywordAnswer,
-            keywordNormalized: config.keywordNormalized,
-            keywordLength: config.keywordLength,
-            questions: config.questions,
-          });
-        } catch (error) {
-          console.error("Error saving config to DB:", error);
-          // Vẫn trả về success vì đã lưu vào memory
-        }
-        
-        return NextResponse.json({ success: true, state: getRound2State() });
+        const state = await loadFullState();
+        return NextResponse.json({ success: true, state });
       }
 
       case "setGameState": {
-        const gameState = data as Partial<Round2GameState>;
-        const currentState = getRound2State();
+        await connectDB();
+        const currentGameState = await loadGameStateFromDB();
+        const gameStateUpdates = data as Partial<Round2GameState>;
         
         // Nếu status chuyển sang "question_open", lưu timestamp và initial time
-        if (gameState.status === "question_open" && currentState.gameState.status !== "question_open") {
-          gameState.questionStartTime = Date.now();
-          gameState.questionInitialTime = gameState.timeLeft !== undefined ? gameState.timeLeft : 15;
-          gameState.timeLeft = gameState.timeLeft !== undefined ? gameState.timeLeft : 15;
+        if (gameStateUpdates.status === "question_open" && currentGameState.status !== "question_open") {
+          gameStateUpdates.questionStartTime = Date.now();
+          gameStateUpdates.questionInitialTime = gameStateUpdates.timeLeft !== undefined ? gameStateUpdates.timeLeft : 15;
+          gameStateUpdates.timeLeft = gameStateUpdates.timeLeft !== undefined ? gameStateUpdates.timeLeft : 15;
         }
         
         // Nếu status chuyển sang không phải "question_open", reset timestamp
-        if (gameState.status !== undefined && gameState.status !== "question_open" && currentState.gameState.status === "question_open") {
-          gameState.questionStartTime = null;
-          gameState.questionInitialTime = null;
+        if (gameStateUpdates.status !== undefined && gameStateUpdates.status !== "question_open" && currentGameState.status === "question_open") {
+          gameStateUpdates.questionStartTime = null;
+          gameStateUpdates.questionInitialTime = null;
         }
         
-        setRound2GameState(gameState);
-        const updatedState = getRound2State();
+        // Merge với current state và save
+        const updatedGameState = { ...currentGameState, ...gameStateUpdates };
+        await saveGameStateToDB(updatedGameState);
         
-        // Tính toán timeLeft nếu đang trong trạng thái question_open
-        if (updatedState.gameState.status === "question_open" && 
-            updatedState.gameState.questionStartTime !== null && 
-            updatedState.gameState.questionInitialTime !== null) {
-          const elapsed = Math.floor((Date.now() - updatedState.gameState.questionStartTime) / 1000);
-          const calculatedTimeLeft = Math.max(0, updatedState.gameState.questionInitialTime - elapsed);
-          setRound2GameState({ timeLeft: calculatedTimeLeft });
-        }
-        
-        return NextResponse.json({ success: true, state: getRound2State() });
+        // Load lại state để trả về (tính toán timeLeft nếu cần)
+        const state = await loadFullState();
+        return NextResponse.json({ success: true, state });
       }
 
       case "setTeams": {
+        await connectDB();
         const teams = data as Round2Team[];
-        setRound2Teams(teams);
-        return NextResponse.json({ success: true, state: getRound2State() });
+        await saveRound2TeamsToDB(teams);
+        const state = await loadFullState();
+        return NextResponse.json({ success: true, state });
       }
 
       case "loadTeams": {
+        await connectDB();
         const teams = await loadTeamsFromDB();
-        setRound2Teams(teams);
-        return NextResponse.json({ success: true, state: getRound2State() });
+        await saveRound2TeamsToDB(teams);
+        const state = await loadFullState();
+        return NextResponse.json({ success: true, state });
       }
 
       case "updateTeamScore": {
+        await connectDB();
         const { teamId, delta } = data;
-        const state = getRound2State();
-        const updatedTeams = state.teams.map((team) =>
+        const currentTeams = await loadRound2TeamsFromDB();
+        const updatedTeams = currentTeams.map((team) =>
           team.id === teamId ? { ...team, score: team.score + delta } : team
         );
-        setRound2Teams(updatedTeams);
-        return NextResponse.json({ success: true, state: getRound2State() });
+        await saveRound2TeamsToDB(updatedTeams);
+        const state = await loadFullState();
+        return NextResponse.json({ success: true, state });
       }
 
       case "reset": {
-        resetRound2GameState();
-        return NextResponse.json({ success: true, state: getRound2State() });
+        await connectDB();
+        const resetGameState: Round2GameState = {
+          status: "idle",
+          activeTeamId: null,
+          activeQuestionId: null,
+          timeLeft: 15,
+          lastAnswerInput: "",
+          teamAnswers: [],
+          guessedKeywordCorrect: false,
+          buzzerPresses: [],
+          buzzerTeamId: null,
+          buzzerTeamName: null,
+          buzzerTimestamp: null,
+          questionStartTime: null,
+          questionInitialTime: null,
+        };
+        await saveGameStateToDB(resetGameState);
+        const state = await loadFullState();
+        return NextResponse.json({ success: true, state });
       }
 
       case "resetAll": {
-        // Reset cả game state và tile status về hidden
-        const state = getRound2State();
-        resetRound2GameState();
+        await connectDB();
+        // Reset game state
+        const resetGameState: Round2GameState = {
+          status: "idle",
+          activeTeamId: null,
+          activeQuestionId: null,
+          timeLeft: 15,
+          lastAnswerInput: "",
+          teamAnswers: [],
+          guessedKeywordCorrect: false,
+          buzzerPresses: [],
+          buzzerTeamId: null,
+          buzzerTeamName: null,
+          buzzerTimestamp: null,
+          questionStartTime: null,
+          questionInitialTime: null,
+        };
+        await saveGameStateToDB(resetGameState);
         
-        // Reset locked teams về false
-        const resetTeams = state.teams.map((team) => ({
+        // Reset teams
+        const currentTeams = await loadRound2TeamsFromDB();
+        const resetTeams = currentTeams.map((team) => ({
           ...team,
           isLocked: false,
         }));
-        setRound2Teams(resetTeams);
+        await saveRound2TeamsToDB(resetTeams);
         
         // Reset tile status về hidden nếu có config
-        if (state.config) {
-          const resetQuestions = state.config.questions.map((q) => ({
+        const config = await loadConfigFromDB();
+        if (config) {
+          const resetQuestions = config.questions.map((q) => ({
             ...q,
             tileStatus: "hidden" as Round2TileStatus,
           }));
-          setRound2Config({ ...state.config, questions: resetQuestions });
+          const resetConfig = { ...config, questions: resetQuestions };
+          await Round2ConfigModel.deleteMany({});
+          await Round2ConfigModel.create({
+            imageOriginalUrl: resetConfig.imageOriginalUrl,
+            keywordAnswer: resetConfig.keywordAnswer,
+            keywordNormalized: resetConfig.keywordNormalized,
+            keywordLength: resetConfig.keywordLength,
+            questions: resetQuestions,
+          });
         }
         
-        return NextResponse.json({ success: true, state: getRound2State() });
+        const state = await loadFullState();
+        return NextResponse.json({ success: true, state });
       }
 
       case "submitAnswer": {
+        await connectDB();
         // Submit đáp án từ đội
         const { teamId, teamName, answer } = data; // teamId là Round2Team id (number), teamName là tên đội
-        const state = getRound2State();
+        const gameState = await loadGameStateFromDB();
+        const teams = await loadRound2TeamsFromDB();
         
-        if (state.gameState.status !== "question_open") {
+        if (gameState.status !== "question_open") {
           return NextResponse.json(
             { error: "Câu hỏi chưa được mở" },
             { status: 400 }
           );
         }
 
-        if (!state.gameState.activeQuestionId) {
+        if (!gameState.activeQuestionId) {
           return NextResponse.json(
             { error: "Chưa có câu hỏi đang active" },
             { status: 400 }
           );
         }
 
-        // Lấy teamName từ state.teams nếu không được cung cấp
+        // Lấy teamName từ teams nếu không được cung cấp
         let finalTeamName = teamName;
         if (!finalTeamName && teamId) {
-          const team = state.teams.find((t) => t.id === teamId);
+          const team = teams.find((t) => t.id === teamId);
           finalTeamName = team?.name || `Đội ${teamId}`;
         }
 
         // Kiểm tra xem đội đã submit đáp án cho câu hỏi này chưa
-        const existingAnswer = state.gameState.teamAnswers.find(
+        const existingAnswer = gameState.teamAnswers.find(
           (ta) => ta.teamId === teamId
         );
 
@@ -284,25 +400,28 @@ export async function POST(request: NextRequest) {
         };
 
         // Thêm đáp án mới
-        const updatedAnswers = [...state.gameState.teamAnswers, newAnswer];
+        const updatedAnswers = [...gameState.teamAnswers, newAnswer];
 
         // Cập nhật game state
-        setRound2GameState({
+        await saveGameStateToDB({
           teamAnswers: updatedAnswers,
           // Giữ nguyên status "question_open" để các đội khác vẫn có thể submit
         });
 
-        return NextResponse.json({ success: true, state: getRound2State() });
+        const state = await loadFullState();
+        return NextResponse.json({ success: true, state });
       }
 
       case "pressBuzzer": {
+        await connectDB();
         // Đội bấm chuông - Cho phép bấm ngay cả khi chưa mở câu hỏi
         // Tất cả các đội đều có thể bấm, nhưng chỉ hiển thị đội bấm trước
         const { teamId, teamName } = data;
-        const state = getRound2State();
+        const gameState = await loadGameStateFromDB();
+        const teams = await loadRound2TeamsFromDB();
         
         // Kiểm tra đội có bị khóa không
-        const team = state.teams.find((t) => t.id === teamId);
+        const team = teams.find((t) => t.id === teamId);
         if (team?.isLocked) {
           return NextResponse.json(
             { error: "Đội của bạn đã bị khóa" },
@@ -311,7 +430,7 @@ export async function POST(request: NextRequest) {
         }
         
         // Kiểm tra đội này đã bấm chuông chưa
-        const alreadyPressed = state.gameState.buzzerPresses?.some(
+        const alreadyPressed = gameState.buzzerPresses?.some(
           (bp) => bp.teamId === teamId
         );
         if (alreadyPressed) {
@@ -328,27 +447,31 @@ export async function POST(request: NextRequest) {
           timestamp: Date.now(),
         };
         
-        const updatedPresses = [...(state.gameState.buzzerPresses || []), newPress];
+        const updatedPresses = [...(gameState.buzzerPresses || []), newPress];
         
         // Lưu thông tin đội bấm chuông
         // Đội đầu tiên (bấm trước) được lưu vào buzzerTeamId để backward compatibility
         const firstPress = updatedPresses[0];
-        setRound2GameState({
+        await saveGameStateToDB({
           buzzerPresses: updatedPresses,
           buzzerTeamId: firstPress.teamId,
           buzzerTeamName: firstPress.teamName,
           buzzerTimestamp: firstPress.timestamp,
         });
         
-        return NextResponse.json({ success: true, state: getRound2State() });
+        const state = await loadFullState();
+        return NextResponse.json({ success: true, state });
       }
 
       case "judgeKeyword": {
+        await connectDB();
         // MC chấm từ khóa đúng/sai - Chấm cho đội bấm trước (đội đầu tiên)
         const { isCorrect } = data;
-        const state = getRound2State();
+        const gameState = await loadGameStateFromDB();
+        const teams = await loadRound2TeamsFromDB();
+        const config = await loadConfigFromDB();
         
-        if (!state.gameState.buzzerPresses || state.gameState.buzzerPresses.length === 0) {
+        if (!gameState.buzzerPresses || gameState.buzzerPresses.length === 0) {
           return NextResponse.json(
             { error: "Chưa có đội nào bấm chuông" },
             { status: 400 }
@@ -356,13 +479,13 @@ export async function POST(request: NextRequest) {
         }
         
         // Lấy đội bấm trước (đội đầu tiên)
-        const firstPress = state.gameState.buzzerPresses[0];
+        const firstPress = gameState.buzzerPresses[0];
         const buzzerTeamId = firstPress.teamId;
         
         if (isCorrect === true) {
           // Tính điểm dựa trên số hình đã mở (revealed)
           // Đếm số hình có tileStatus === "revealed"
-          const revealedCount = state.config?.questions.filter(
+          const revealedCount = config?.questions.filter(
             (q) => q.tileStatus === "revealed"
           ).length || 0;
           
@@ -379,13 +502,13 @@ export async function POST(request: NextRequest) {
           }
           
           // Cộng điểm cho đội bấm trước
-          const updatedTeams = state.teams.map((team) =>
+          const updatedTeams = teams.map((team) =>
             team.id === buzzerTeamId ? { ...team, score: team.score + points } : team
           );
-          setRound2Teams(updatedTeams);
+          await saveRound2TeamsToDB(updatedTeams);
           
           // Kết thúc vòng
-          setRound2GameState({
+          await saveGameStateToDB({
             status: "round_finished",
             guessedKeywordCorrect: true,
             buzzerPresses: [],
@@ -395,19 +518,19 @@ export async function POST(request: NextRequest) {
           });
         } else {
           // Sai: Khóa đội bấm trước
-          const updatedTeams = state.teams.map((team) =>
+          const updatedTeams = teams.map((team) =>
             team.id === buzzerTeamId ? { ...team, isLocked: true } : team
           );
-          setRound2Teams(updatedTeams);
+          await saveRound2TeamsToDB(updatedTeams);
           
           // Xóa đội bị khóa khỏi danh sách buzzer, đội tiếp theo sẽ trở thành đội bấm trước
-          const remainingPresses = state.gameState.buzzerPresses.filter(
+          const remainingPresses = gameState.buzzerPresses.filter(
             (bp) => bp.teamId !== buzzerTeamId
           );
           
           if (remainingPresses.length > 0) {
             const nextPress = remainingPresses[0];
-            setRound2GameState({
+            await saveGameStateToDB({
               buzzerPresses: remainingPresses,
               buzzerTeamId: nextPress.teamId,
               buzzerTeamName: nextPress.teamName,
@@ -415,7 +538,7 @@ export async function POST(request: NextRequest) {
             });
           } else {
             // Không còn đội nào, reset buzzer
-            setRound2GameState({
+            await saveGameStateToDB({
               buzzerPresses: [],
               buzzerTeamId: null,
               buzzerTeamName: null,
@@ -424,15 +547,19 @@ export async function POST(request: NextRequest) {
           }
         }
         
-        return NextResponse.json({ success: true, state: getRound2State() });
+        const state = await loadFullState();
+        return NextResponse.json({ success: true, state });
       }
 
       case "markAnswer": {
+        await connectDB();
         // MC đánh dấu đáp án đúng/sai
         const { teamId, isCorrect } = data;
-        const state = getRound2State();
+        const gameState = await loadGameStateFromDB();
+        const teams = await loadRound2TeamsFromDB();
+        const config = await loadConfigFromDB();
 
-        const answerIndex = state.gameState.teamAnswers.findIndex(
+        const answerIndex = gameState.teamAnswers.findIndex(
           (ta) => ta.teamId === teamId
         );
 
@@ -444,10 +571,10 @@ export async function POST(request: NextRequest) {
         }
 
         // Kiểm tra xem đã chấm điểm chưa (tránh cộng điểm nhiều lần)
-        const currentAnswer = state.gameState.teamAnswers[answerIndex];
+        const currentAnswer = gameState.teamAnswers[answerIndex];
         const wasAlreadyMarked = currentAnswer.isCorrect !== null;
 
-        const updatedAnswers = [...state.gameState.teamAnswers];
+        const updatedAnswers = [...gameState.teamAnswers];
         updatedAnswers[answerIndex] = {
           ...updatedAnswers[answerIndex],
           isCorrect,
@@ -455,23 +582,25 @@ export async function POST(request: NextRequest) {
 
         // Nếu đánh dấu đúng và chưa từng chấm điểm trước đó, tự động cộng điểm
         if (isCorrect === true && !wasAlreadyMarked) {
-          const updatedTeams = state.teams.map((team) =>
+          const updatedTeams = teams.map((team) =>
             team.id === teamId ? { ...team, score: team.score + 10 } : team
           );
-          setRound2Teams(updatedTeams);
+          await saveRound2TeamsToDB(updatedTeams);
         }
 
-        setRound2GameState({ teamAnswers: updatedAnswers });
+        await saveGameStateToDB({ teamAnswers: updatedAnswers });
 
-        const updatedState = getRound2State();
-        const activeQuestionId = updatedState.gameState.activeQuestionId;
+        // Load lại state để kiểm tra
+        const updatedGameState = await loadGameStateFromDB();
+        const updatedTeams = await loadRound2TeamsFromDB();
+        const activeQuestionId = updatedGameState.activeQuestionId;
 
         // Kiểm tra xem tất cả đội đã được chấm chưa
-        const totalTeams = updatedState.teams.length;
-        const teamsWithAnswers = updatedState.gameState.teamAnswers.length;
+        const totalTeams = updatedTeams.length;
+        const teamsWithAnswers = updatedGameState.teamAnswers.length;
         
         // Kiểm tra xem tất cả đội đã gửi đáp án đều đã được chấm
-        const allSubmittedAnswersMarked = updatedState.gameState.teamAnswers.every(
+        const allSubmittedAnswersMarked = updatedGameState.teamAnswers.every(
           (ta) => ta.isCorrect !== null
         );
         
@@ -484,63 +613,49 @@ export async function POST(request: NextRequest) {
         const shouldClose = allSubmittedAnswersMarked && 
           teamsWithAnswers > 0 && 
           activeQuestionId && 
-          state.config &&
+          config &&
           (teamsWithAnswers >= 2 || teamsWithAnswers === totalTeams);
         
-        if (shouldClose && state.config && activeQuestionId) {
+        if (shouldClose && config && activeQuestionId) {
           // Kiểm tra xem có đội nào trả lời đúng không
-          const hasCorrectAnswer = updatedState.gameState.teamAnswers.some(
+          const hasCorrectAnswer = updatedGameState.teamAnswers.some(
             (ta) => ta.isCorrect === true
           );
 
           if (hasCorrectAnswer) {
             // Có ít nhất 1 đáp án đúng → reveal tile (hiển thị hình ảnh)
-            const updatedQuestions = state.config.questions.map((q) =>
+            const updatedQuestions = config.questions.map((q) =>
               q.id === activeQuestionId ? { ...q, tileStatus: "revealed" as Round2TileStatus } : q
             );
-            const updatedConfig = { ...state.config, questions: updatedQuestions };
-            setRound2Config(updatedConfig);
             
             // Lưu config đã cập nhật vào database
-            try {
-              await connectDB();
-              await Round2ConfigModel.deleteMany({});
-              await Round2ConfigModel.create({
-                imageOriginalUrl: updatedConfig.imageOriginalUrl,
-                keywordAnswer: updatedConfig.keywordAnswer,
-                keywordNormalized: updatedConfig.keywordNormalized,
-                keywordLength: updatedConfig.keywordLength,
-                questions: updatedQuestions,
-              });
-            } catch (error) {
-              console.error("Error saving updated config to DB:", error);
-            }
+            await Round2ConfigModel.deleteMany({});
+            await Round2ConfigModel.create({
+              imageOriginalUrl: config.imageOriginalUrl,
+              keywordAnswer: config.keywordAnswer,
+              keywordNormalized: config.keywordNormalized,
+              keywordLength: config.keywordLength,
+              questions: updatedQuestions,
+            });
           } else {
             // Tất cả đều sai → đánh dấu wrong (giữ che)
-            const updatedQuestions = state.config.questions.map((q) =>
+            const updatedQuestions = config.questions.map((q) =>
               q.id === activeQuestionId ? { ...q, tileStatus: "wrong" as Round2TileStatus } : q
             );
-            const updatedConfig = { ...state.config, questions: updatedQuestions };
-            setRound2Config(updatedConfig);
             
             // Lưu config đã cập nhật vào database
-            try {
-              await connectDB();
-              await Round2ConfigModel.deleteMany({});
-              await Round2ConfigModel.create({
-                imageOriginalUrl: updatedConfig.imageOriginalUrl,
-                keywordAnswer: updatedConfig.keywordAnswer,
-                keywordNormalized: updatedConfig.keywordNormalized,
-                keywordLength: updatedConfig.keywordLength,
-                questions: updatedQuestions,
-              });
-            } catch (error) {
-              console.error("Error saving updated config to DB:", error);
-            }
+            await Round2ConfigModel.deleteMany({});
+            await Round2ConfigModel.create({
+              imageOriginalUrl: config.imageOriginalUrl,
+              keywordAnswer: config.keywordAnswer,
+              keywordNormalized: config.keywordNormalized,
+              keywordLength: config.keywordLength,
+              questions: updatedQuestions,
+            });
           }
           
           // Reset game state về idle sau khi đã xử lý xong
-          setRound2GameState({
+          await saveGameStateToDB({
             status: "idle",
             activeQuestionId: null,
             lastAnswerInput: "",
@@ -548,7 +663,8 @@ export async function POST(request: NextRequest) {
           });
         }
         
-        return NextResponse.json({ success: true, state: getRound2State() });
+        const state = await loadFullState();
+        return NextResponse.json({ success: true, state });
       }
 
       default:
