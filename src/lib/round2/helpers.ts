@@ -13,13 +13,10 @@ export function countKeywordLetters(keyword: string): number {
 }
 
 /**
- * Đếm số từ trong answer text
+ * Đếm số chữ cái trong answer text (loại bỏ khoảng trắng)
  */
 export function countAnswerWords(answerText: string): number {
-  return answerText
-    .trim()
-    .split(/\s+/)
-    .filter((word) => word.length > 0).length;
+  return answerText.replace(/\s+/g, "").length;
 }
 
 /**

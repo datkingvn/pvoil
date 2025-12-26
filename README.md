@@ -24,7 +24,37 @@ Hoặc nếu sử dụng MongoDB Atlas:
 MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/pvoil-olympia
 ```
 
-### 3. Cấu hình Pusher (Real-time sync đa thiết bị)
+### 3. Cấu hình Cloudflare R2 (File Storage)
+
+Để upload ảnh lên Cloudflare R2, bạn cần:
+
+1. **Tạo R2 bucket**: Truy cập [Cloudflare Dashboard](https://dash.cloudflare.com) → R2 → Create bucket
+2. **Tạo API Token**: R2 → Manage R2 API Tokens → Create API Token
+3. **Lấy thông tin**:
+   - Account ID (tìm ở R2 dashboard)
+   - Access Key ID (từ API token)
+   - Secret Access Key (từ API token)
+   - Bucket Name (tên bucket bạn đã tạo)
+   - Public URL (cấu hình Custom Domain hoặc dùng R2.dev subdomain)
+
+4. **Thêm vào `.env.local`**:
+
+```env
+# Cloudflare R2 Configuration
+R2_ACCOUNT_ID=your_account_id
+R2_ACCESS_KEY_ID=your_access_key_id
+R2_SECRET_ACCESS_KEY=your_secret_access_key
+R2_BUCKET_NAME=your_bucket_name
+R2_PUBLIC_URL=https://your-public-domain.com
+# Hoặc nếu dùng R2.dev subdomain:
+# R2_PUBLIC_URL=https://pub-xxxxx.r2.dev
+```
+
+**Lưu ý**: 
+- R2 free tier cho phép **10GB storage** và **1M Class A operations/tháng**
+- Cần cấu hình Custom Domain hoặc Public Bucket Access để có public URL
+
+### 4. Cấu hình Pusher (Real-time sync đa thiết bị)
 
 Để đồng bộ real-time giữa MC và các màn hình đội thi trên nhiều thiết bị khác nhau, bạn cần tạo tài khoản Pusher miễn phí:
 
@@ -50,7 +80,7 @@ NEXT_PUBLIC_PUSHER_CLUSTER=ap1
 - Pusher free tier cho phép **200,000 messages/ngày** - đủ cho game show
 - Nếu không cấu hình Pusher, ứng dụng vẫn hoạt động nhưng chỉ sync được giữa các tab trên cùng máy (qua BroadcastChannel)
 
-### 3. Chạy ứng dụng
+### 5. Chạy ứng dụng
 
 ```bash
 npm run dev

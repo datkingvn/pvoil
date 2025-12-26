@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.958.0",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/bcryptjs": "^2.4.6",
     "bcryptjs": "^3.0.3",
@@ -18,12 +19,12 @@
     "mongodb": "^7.0.0",
     "mongoose": "^9.0.2",
     "next": "^16.1.1",
+    "pusher": "^5.2.0",
+    "pusher-js": "^8.4.0-rc2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-hotkeys-hook": "^5.2.1",
-    "zustand": "^5.0.9",
-    "pusher-js": "^8.4.0-rc2",
-    "pusher": "^5.2.0"
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@types/howler": "^2.2.12",

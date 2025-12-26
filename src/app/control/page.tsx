@@ -386,6 +386,7 @@ export default function ControlPage() {
                                       status: "tile_selected",
                                       activeQuestionId: tileId,
                                       timeLeft: 15,
+                                      teamAnswers: [], // Reset đáp án khi chọn tile mới
                                     },
                                   }),
                                 });
@@ -449,6 +450,11 @@ export default function ControlPage() {
                                   data: {
                                     status: "question_open",
                                     timeLeft: 15,
+                                    teamAnswers: [], // Reset đáp án khi bắt đầu câu hỏi mới
+                                    buzzerPresses: [], // Reset buzzer khi bắt đầu câu hỏi mới
+                                    buzzerTeamId: null,
+                                    buzzerTeamName: null,
+                                    buzzerTimestamp: null,
                                   },
                                 }),
                               });
@@ -484,131 +490,9 @@ export default function ControlPage() {
                       </div>
                     )}
 
-                    {/* Hiển thị đáp án đã gửi và nút xác nhận */}
-                    {round2State.gameState?.status === "waiting_confirmation" && round2State.gameState?.activeQuestionId && (
-                      <div className="mt-4 p-3 bg-gray-700 rounded-lg border border-gray-600">
-                        <div className="text-sm text-gray-400 mb-2">Đáp án đã gửi:</div>
-                        <div className="text-white font-medium mb-3 p-2 bg-gray-800 rounded border border-gray-600 min-h-[60px] flex items-center">
-                          {round2State.gameState?.lastAnswerInput || "Chưa có đáp án"}
-                        </div>
-                        <div className="text-sm text-gray-400 mb-2">Đáp án đúng:</div>
-                        <div className="text-white font-medium mb-3 p-2 bg-gray-800 rounded border border-gray-600 min-h-[60px] flex items-center">
-                          {round2State.config?.questions.find((q: any) => q.id === round2State.gameState?.activeQuestionId)?.answerText || "N/A"}
-                        </div>
-                        <div className="text-sm text-gray-400 mb-2">Xác nhận kết quả:</div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            onClick={async () => {
-                              const tileId = round2State.gameState.activeQuestionId;
-                              const activeTeamId = round2State.gameState.activeTeamId;
-                              
-                              // Xác nhận đúng → cộng điểm + reveal tile (hiển thị hình ảnh)
-                              const updatedQuestions = round2State.config.questions.map((q: any) =>
-                                q.id === tileId ? { ...q, tileStatus: "revealed" } : q
-                              );
-                              
-                              try {
-                                // Cộng điểm cho đội
-                                if (activeTeamId) {
-                                  await fetch("/api/round2/state", {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({
-                                      action: "updateTeamScore",
-                                      data: { teamId: activeTeamId, delta: 10 },
-                                    }),
-                                  });
-                                }
-                                
-                                // Update config: reveal tile
-                                await fetch("/api/round2/state", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    action: "setConfig",
-                                    data: { ...round2State.config, questions: updatedQuestions },
-                                  }),
-                                });
-                                
-                                // Reset game state về idle
-                                const res = await fetch("/api/round2/state", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    action: "setGameState",
-                                    data: {
-                                      status: "idle",
-                                      activeQuestionId: null,
-                                      lastAnswerInput: "",
-                                    },
-                                  }),
-                                });
-                                // Reload state ngay
-                                if (res.ok) {
-                                  const data = await res.json();
-                                  setRound2State(data.state);
-                                }
-                              } catch (error) {
-                                console.error("Error confirming answer:", error);
-                              }
-                            }}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                          >
-                            <CheckCircle className="w-5 h-5" />
-                            Đúng (+10) - Mở hình
-                          </button>
-                          <button
-                            onClick={async () => {
-                              const tileId = round2State.gameState.activeQuestionId;
-                              // Xác nhận sai → wrong tile (vẫn che, không hiển thị hình)
-                              const updatedQuestions = round2State.config.questions.map((q: any) =>
-                                q.id === tileId ? { ...q, tileStatus: "wrong" } : q
-                              );
-                              
-                              try {
-                                // Update config: wrong tile (vẫn che)
-                                await fetch("/api/round2/state", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    action: "setConfig",
-                                    data: { ...round2State.config, questions: updatedQuestions },
-                                  }),
-                                });
-                                
-                                // Reset game state về idle
-                                const res = await fetch("/api/round2/state", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    action: "setGameState",
-                                    data: {
-                                      status: "idle",
-                                      activeQuestionId: null,
-                                      lastAnswerInput: "",
-                                    },
-                                  }),
-                                });
-                                // Reload state ngay
-                                if (res.ok) {
-                                  const data = await res.json();
-                                  setRound2State(data.state);
-                                }
-                              } catch (error) {
-                                console.error("Error confirming answer:", error);
-                              }
-                            }}
-                            className="px-4 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                          >
-                            <XCircle className="w-5 h-5" />
-                            Sai - Giữ che
-                          </button>
-                        </div>
-                      </div>
-                    )}
                       </>
                     )}
-                  </div>
+                        </div>
                 )}
 
                 {/* Thông tin trạng thái */}
@@ -618,6 +502,137 @@ export default function ControlPage() {
                     {round2State.gameState.guessedKeywordCorrect && (
                       <span className="text-green-400 ml-2">✓ Đã đoán đúng keyword</span>
                     )}
+                        </div>
+                )}
+
+                {/* Duyệt câu trả lời của các đội - Vòng 2 */}
+                {/* Hiển thị khi đang mở câu hỏi hoặc đã hết thời gian nhưng chưa chấm hết */}
+                {/* QUAN TRỌNG: Hiển thị đáp án của TẤT CẢ các đội, không phụ thuộc vào activeTeamId */}
+                {/* activeTeamId chỉ dùng để chọn tile, còn tất cả các đội đều có thể gửi đáp án */}
+                {round2State?.gameState?.status === "question_open" && round2State?.gameState?.activeQuestionId && (
+                  <div className="bg-gray-700 rounded-lg p-4 border border-gray-600 mt-4">
+                    <h3 className="text-lg font-bold mb-3 text-white">Duyệt câu trả lời</h3>
+                    <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                      {/* Hiển thị TẤT CẢ các đội: đội đã gửi đáp án trước, sau đó hiển thị các đội chưa gửi */}
+                      {(() => {
+                        // Lấy danh sách TẤT CẢ đội đã gửi đáp án (không lọc theo activeTeamId)
+                        const teamsWithAnswers = round2State.gameState.teamAnswers?.map((ta: any) => {
+                          const team = round2State.teams.find((t: any) => t.id === ta.teamId);
+                          return {
+                            teamId: ta.teamId,
+                            teamName: ta.teamName || team?.name || `Đội ${ta.teamId}`, // Ưu tiên teamName từ answer
+                            answer: ta,
+                          };
+                        }) || [];
+                              
+                        // Lấy danh sách TẤT CẢ đội chưa gửi đáp án (không lọc theo activeTeamId)
+                        const teamsWithoutAnswers = round2State.teams.filter((team: any) => 
+                          !round2State.gameState.teamAnswers?.some((ta: any) => ta.teamId === team.id)
+                        );
+                        
+                        // Kết hợp: đội đã gửi trước, đội chưa gửi sau - HIỂN THỊ TẤT CẢ
+                        return [...teamsWithAnswers, ...teamsWithoutAnswers.map((team: any) => ({
+                          teamId: team.id,
+                          teamName: team.name,
+                          answer: null,
+                        }))].map((item) => {
+                          const teamAnswer = item.answer;
+                          return (
+                            <div
+                              key={item.teamId}
+                              className={`p-3 rounded-lg border-2 transition-all ${
+                                teamAnswer?.isCorrect === true
+                                  ? "bg-green-900/30 border-green-600"
+                                  : teamAnswer?.isCorrect === false
+                                  ? "bg-red-900/30 border-red-600"
+                                  : teamAnswer
+                                  ? "bg-yellow-900/30 border-yellow-600"
+                                  : "bg-gray-700/50 border-gray-600"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-semibold text-white">{item.teamName}</span>
+                                {teamAnswer?.isCorrect === true && (
+                                  <span className="text-green-400 text-sm">✓ Đúng</span>
+                                )}
+                                {teamAnswer?.isCorrect === false && (
+                                  <span className="text-red-400 text-sm">✗ Sai</span>
+                                )}
+                                {teamAnswer && teamAnswer.isCorrect === null && (
+                                  <span className="text-yellow-400 text-sm">⏳ Chờ chấm</span>
+                                )}
+                                {!teamAnswer && (
+                                  <span className="text-gray-400 text-sm">Chưa gửi</span>
+                                )}
+                              </div>
+                              {teamAnswer ? (
+                                <div className="text-white text-sm mt-1">
+                                  Đáp án: <span className="font-medium">{teamAnswer.answer || "(Trống)"}</span>
+                                </div>
+                              ) : (
+                                <div className="text-gray-400 text-sm mt-1">Chưa có đáp án</div>
+                              )}
+                              {teamAnswer && teamAnswer.isCorrect === null && (
+                                <div className="flex gap-2 mt-2">
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                const res = await fetch("/api/round2/state", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                            action: "markAnswer",
+                                    data: {
+                                              teamId: item.teamId,
+                                              isCorrect: true,
+                                    },
+                                  }),
+                                });
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setRound2State(data.state);
+                                }
+                              } catch (error) {
+                                        console.error("Error marking answer:", error);
+                              }
+                            }}
+                                    className="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded transition-colors"
+                          >
+                                    ✓ Đúng
+                          </button>
+                          <button
+                            onClick={async () => {
+                                      try {
+                                const res = await fetch("/api/round2/state", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                            action: "markAnswer",
+                                    data: {
+                                              teamId: item.teamId,
+                                              isCorrect: false,
+                                    },
+                                  }),
+                                });
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setRound2State(data.state);
+                                }
+                              } catch (error) {
+                                        console.error("Error marking answer:", error);
+                              }
+                            }}
+                                    className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded transition-colors"
+                          >
+                                    ✗ Sai
+                          </button>
+                      </div>
+                    )}
+                  </div>
+                          );
+                        });
+                      })()}
+                    </div>
                   </div>
                 )}
               </div>
@@ -783,7 +798,108 @@ export default function ControlPage() {
                   </div>
                 </div>
               </div>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
+              
+              {/* Hiển thị ai bấm chuông và nút chấm điểm từ khóa */}
+              {(() => {
+                const buzzerPresses = round2State?.gameState?.buzzerPresses || [];
+                const firstBuzzer = buzzerPresses.length > 0 ? buzzerPresses[0] : null;
+                
+                if (!firstBuzzer) return null;
+                
+                return (
+                  <div className="mt-4 p-4 bg-yellow-900/30 border-2 border-yellow-500 rounded-lg animate-pulse">
+                    <div className="text-yellow-400 font-bold text-lg mb-2">
+                      🔔 {firstBuzzer.teamName} đã bấm chuông trước!
+                    </div>
+                    {buzzerPresses.length > 1 && (
+                      <div className="text-orange-300 text-sm mb-2">
+                        Các đội khác đã bấm: {buzzerPresses.slice(1).map((bp: any) => bp.teamName).join(", ")}
+                      </div>
+                    )}
+                    <div className="text-white text-sm mb-3">
+                      Chấm điểm từ khóa của đội bấm trước ({firstBuzzer.teamName}):
+                    </div>
+                    {(() => {
+                      // Tính điểm dựa trên số hình đã mở
+                      const revealedCount = round2State?.config?.questions?.filter(
+                        (q: any) => q.tileStatus === "revealed"
+                      ).length || 0;
+                      
+                      let points = 80;
+                      if (revealedCount >= 4) {
+                        points = 20;
+                      } else if (revealedCount >= 3) {
+                        points = 40;
+                      } else if (revealedCount >= 2) {
+                        points = 60;
+                      } else {
+                        points = 80; // 1 hình trở xuống
+                      }
+                      
+                      return (
+                        <div className="text-yellow-300 text-xs mb-2">
+                          Số hình đã mở: {revealedCount} → Điểm: +{points}
+                        </div>
+                      );
+                    })()}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch("/api/round2/state", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              action: "judgeKeyword",
+                              data: {
+                                isCorrect: true,
+                              },
+                            }),
+                          });
+                          if (res.ok) {
+                            const data = await res.json();
+                            setRound2State(data.state);
+                          }
+                        } catch (error) {
+                          console.error("Error judging keyword:", error);
+                        }
+                      }}
+                      className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded transition-colors"
+                    >
+                      ✓ Đúng
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch("/api/round2/state", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              action: "judgeKeyword",
+                              data: {
+                                isCorrect: false,
+                              },
+                            }),
+                          });
+                          if (res.ok) {
+                            const data = await res.json();
+                            setRound2State(data.state);
+                          }
+                        } catch (error) {
+                          console.error("Error judging keyword:", error);
+                        }
+                      }}
+                      className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded transition-colors"
+                    >
+                      ✗ Sai (Khóa đội)
+                    </button>
+                  </div>
+                </div>
+                );
+              })()}
+              
+              {/* Hiển thị bảng điểm các đội ở dưới */}
+              <div className="space-y-2 max-h-64 overflow-y-auto mt-4">
                 {teams.map((team) => (
                   <TeamCard key={team.teamId} team={team} />
                 ))}

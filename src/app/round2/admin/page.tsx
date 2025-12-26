@@ -219,7 +219,7 @@ export default function Round2AdminPage() {
                       className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neon-blue"
                     />
                     <div className="text-gray-400 text-xs mt-1">
-                      Số từ: <span className="text-neon-blue font-bold">{q.answerWordCount}</span>
+                      Số chữ cái: <span className="text-neon-blue font-bold">{q.answerWordCount}</span>
                     </div>
                   </div>
                 </div>

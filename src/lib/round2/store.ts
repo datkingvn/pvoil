@@ -9,7 +9,12 @@ let round2State: Round2State = {
     activeQuestionId: null,
     timeLeft: 15,
     lastAnswerInput: "",
+    teamAnswers: [],
     guessedKeywordCorrect: false,
+    buzzerPresses: [],
+    buzzerTeamId: null,
+    buzzerTeamName: null,
+    buzzerTimestamp: null,
   },
   teams: [],
 };
@@ -42,7 +47,12 @@ export function resetRound2GameState(): void {
     activeQuestionId: null,
     timeLeft: 15,
     lastAnswerInput: "",
+    teamAnswers: [],
     guessedKeywordCorrect: false,
+    buzzerPresses: [],
+    buzzerTeamId: null,
+    buzzerTeamName: null,
+    buzzerTimestamp: null,
   };
 }
 

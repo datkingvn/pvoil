@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useGameStore } from "@/lib/store";
 import { useBroadcastSync } from "@/hooks/useBroadcastSync";
@@ -20,6 +21,7 @@ import {
   VolumeX,
   LogOut,
   Clock,
+  Bell,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -112,8 +114,10 @@ export default function StagePage() {
   useBroadcastSync(); // Sync với các tab cùng máy
   useGameWebSocket("stage"); // Sync qua WebSocket với các thiết bị khác
   const { team, logout } = useAuth();
+  const router = useRouter();
   const [round2State, setRound2State] = useState<any>(null);
   const [round2AnswerInput, setRound2AnswerInput] = useState("");
+  const [round2TeamId, setRound2TeamId] = useState<number | null>(null);
 
   const {
     currentRound,
@@ -153,31 +157,21 @@ export default function StagePage() {
     }
   }, [currentRound]);
 
+  // Tự động redirect sang trang vòng 2 khi MC chuyển round
+  useEffect(() => {
+    if (team && currentRound === "vuot-chuong-ngai-vat") {
+      // Redirect đến trang vòng 2
+      router.push("/round2/play");
+    }
+  }, [currentRound, team, router]);
+
   // Timer countdown cho round2
   useEffect(() => {
     if (currentRound !== "vuot-chuong-ngai-vat") return;
     if (!round2State?.gameState) return;
     if (round2State.gameState.status !== "question_open") return;
     if (round2State.gameState.timeLeft <= 0) {
-      // Hết thời gian => tự động submit với answer rỗng
-      const handleTimeout = async () => {
-        try {
-          await fetch("/api/round2/state", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "setGameState",
-              data: {
-                lastAnswerInput: "",
-                status: "waiting_confirmation",
-              },
-            }),
-          });
-        } catch (error) {
-          console.error("Error handling timeout:", error);
-        }
-      };
-      handleTimeout();
+      // Hết thời gian => chỉ dừng timer, không đổi status
       return;
     }
 
@@ -191,26 +185,23 @@ export default function StagePage() {
         const newTimeLeft = prev.gameState.timeLeft - 1;
         if (newTimeLeft <= 0) {
           clearInterval(timer);
-          // Hết thời gian => tự động submit với answer rỗng
-          const handleTimeout = async () => {
-            try {
-              await fetch("/api/round2/state", {
+          // Hết thời gian => chỉ cập nhật timeLeft = 0, giữ nguyên status "question_open"
+          const updatedState = {
+            ...prev,
+            gameState: { ...prev.gameState, timeLeft: 0 },
+          };
+
+          // Sync với server
+          fetch("/api/round2/state", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   action: "setGameState",
-                  data: {
-                    lastAnswerInput: "",
-                    status: "waiting_confirmation",
-                  },
+              data: { timeLeft: 0 },
                 }),
-              });
-            } catch (error) {
-              console.error("Error handling timeout:", error);
-            }
-          };
-          handleTimeout();
-          return prev;
+          }).catch(console.error);
+
+          return updatedState;
         }
 
         // Update local state immediately for UI responsiveness
@@ -239,6 +230,19 @@ export default function StagePage() {
   useEffect(() => {
     loadTeams();
   }, [loadTeams]);
+
+  // Map team từ DB sang Round2Team id
+  useEffect(() => {
+    if (team && round2State?.teams) {
+      // Tìm team trong round2State.teams dựa vào teamName
+      const round2Team = round2State.teams.find(
+        (t: any) => t.name === team.teamName
+      );
+      if (round2Team) {
+        setRound2TeamId(round2Team.id);
+      }
+    }
+  }, [team, round2State?.teams]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -430,7 +434,7 @@ export default function StagePage() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
           >
-            {/* Top-Left: Tile Grid */}
+            {/* Ô 1: Tile Grid */}
             {round2State?.config ? (
               <div className="bg-slate-950/95 rounded-xl p-4 border border-slate-700/50 relative overflow-hidden">
                 <TileGrid
@@ -447,17 +451,23 @@ export default function StagePage() {
               </div>
             )}
 
-            {/* Top-Right: Obstacle Display */}
+            {/* Ô 2: Obstacle Display */}
             {round2State?.config ? (
+              <div className="bg-slate-950/95 rounded-xl p-4 border border-slate-700/50 relative overflow-hidden">
               <ObstacleDisplay
                 keywordLength={round2State.config.keywordLength}
                 answerWordCounts={round2State.config.questions.map((q: any) => q.answerWordCount)}
+                questions={round2State.config.questions}
+                activeQuestionId={round2State.gameState?.activeQuestionId || null}
               />
+              </div>
             ) : (
+              <div className="bg-slate-950/95 rounded-xl p-4 border border-slate-700/50 relative overflow-hidden">
               <ObstaclePuzzleUI />
+              </div>
             )}
 
-            {/* Bottom-Left: Câu hỏi + Timer + Input đáp án */}
+            {/* Ô 3: Câu hỏi + Timer + Input đáp án */}
             <div
               className="bg-slate-950/95 rounded-xl p-6 border-2 border-white/90 relative overflow-hidden flex flex-col"
               style={{
@@ -466,6 +476,79 @@ export default function StagePage() {
                 backgroundSize: "40px 40px",
               }}
             >
+              {/* Bảng điểm các đội - phía trên */}
+              {round2State?.teams && round2State.teams.length > 0 && (
+                <div className="mb-4 pb-4 border-b border-slate-700/50">
+                  <div className="flex items-center justify-between gap-2">
+                    {round2State.teams
+                      .sort((a: any, b: any) => b.score - a.score)
+                      .map((teamItem: any) => {
+                        const buzzerPresses = round2State?.gameState?.buzzerPresses || [];
+                        const isBuzzerTeam = buzzerPresses.some((bp: any) => bp.teamId === teamItem.id);
+                        const isFirstBuzzer = buzzerPresses.length > 0 && buzzerPresses[0].teamId === teamItem.id;
+                        
+                        // Tìm thứ tự của đội này trong danh sách buzzer để áp dụng màu
+                        const buzzerIndex = buzzerPresses.findIndex((bp: any) => bp.teamId === teamItem.id);
+                        
+                        // Màu khác nhau cho mỗi đội: cam, vàng, xanh lá, tím
+                        const buzzerColors = [
+                          { border: "border-orange-500", bg: "bg-orange-900/40", shadow: "shadow-orange-500/50", ring: "ring-orange-400", ping: "bg-orange-500/40", gradient: "from-orange-400/30 via-yellow-400/30 to-orange-500/30", text: "text-orange-300", badge: "bg-orange-500" },
+                          { border: "border-yellow-500", bg: "bg-yellow-900/40", shadow: "shadow-yellow-500/50", ring: "ring-yellow-400", ping: "bg-yellow-500/40", gradient: "from-yellow-400/30 via-amber-400/30 to-yellow-500/30", text: "text-yellow-300", badge: "bg-yellow-500" },
+                          { border: "border-green-500", bg: "bg-green-900/40", shadow: "shadow-green-500/50", ring: "ring-green-400", ping: "bg-green-500/40", gradient: "from-green-400/30 via-emerald-400/30 to-green-500/30", text: "text-green-300", badge: "bg-green-500" },
+                          { border: "border-purple-500", bg: "bg-purple-900/40", shadow: "shadow-purple-500/50", ring: "ring-purple-400", ping: "bg-purple-500/40", gradient: "from-purple-400/30 via-pink-400/30 to-purple-500/30", text: "text-purple-300", badge: "bg-purple-500" },
+                        ];
+                        
+                        const colorScheme = buzzerIndex >= 0 ? buzzerColors[buzzerIndex % buzzerColors.length] : null;
+                        
+                        return (
+                          <div
+                            key={teamItem.id}
+                            className={`flex-1 flex flex-col items-center p-2 rounded-lg border transition-all relative ${
+                              team && team.teamName === teamItem.name
+                                ? "bg-neon-blue/20 border-neon-blue"
+                                : "bg-slate-800/50 border-slate-700"
+                            } ${isBuzzerTeam && colorScheme ? `${colorScheme.border} ${colorScheme.bg} shadow-lg ${colorScheme.shadow}` : ""} ${isFirstBuzzer && colorScheme ? `ring-2 ${colorScheme.ring} ring-offset-2 ring-offset-slate-950` : ""}`}
+                          >
+                            {/* Visual effect nhấp nháy liên tục khi đội này bấm chuông - màu khác nhau cho mỗi đội */}
+                            {isBuzzerTeam && colorScheme && (
+                              <>
+                                <div className={`absolute inset-0 ${colorScheme.ping} rounded-lg animate-ping`} />
+                                <div className={`absolute inset-0 bg-gradient-to-br ${colorScheme.gradient} rounded-lg animate-pulse`} />
+                              </>
+                            )}
+                            {/* Hiệu ứng đặc biệt cho đội bấm trước */}
+                            {isFirstBuzzer && colorScheme && (
+                              <div className={`absolute -top-1 -right-1 ${colorScheme.badge} text-white text-xs font-bold px-2 py-1 rounded-full animate-bounce`}>
+                                1ST
+                              </div>
+                            )}
+                            <div
+                              className={`text-xs font-medium mb-1 relative z-10 ${
+                                team && team.teamName === teamItem.name
+                                  ? "text-neon-blue"
+                                  : isBuzzerTeam && colorScheme
+                                  ? isFirstBuzzer
+                                    ? `${colorScheme.text} font-bold drop-shadow-lg`
+                                    : `${colorScheme.text} font-semibold`
+                                  : "text-gray-300"
+                              }`}
+                            >
+                              {teamItem.name}
+                              {isBuzzerTeam && " 🔔"}
+                              {isFirstBuzzer && " ⭐"}
+                            </div>
+                            <div className={`font-bold text-lg relative z-10 ${
+                              isBuzzerTeam && colorScheme ? isFirstBuzzer ? `${colorScheme.text} drop-shadow-lg` : colorScheme.text : "text-white"
+                            }`}>
+                              {teamItem.score}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
               <div className="flex-1 mb-4 pr-4 overflow-y-auto">
                 {round2State?.gameState?.status === "tile_selected" && round2State?.gameState?.activeQuestionId ? (
                   <div className="text-gray-400 text-lg italic">
@@ -476,18 +559,6 @@ export default function StagePage() {
                     {round2State.config?.questions.find(
                       (q: any) => q.id === round2State.gameState.activeQuestionId
                     )?.questionText || "Đang tải câu hỏi..."}
-                  </div>
-                ) : round2State?.gameState?.status === "waiting_confirmation" ? (
-                  <div className="text-yellow-400 text-lg font-semibold">
-                    ⏳ Đã gửi đáp án. Chờ MC xác nhận...
-                  </div>
-                ) : round2State?.gameState?.status === "answered_correct" ? (
-                  <div className="text-green-400 text-lg font-semibold">
-                    ✓ Trả lời đúng! Chờ MC xác nhận...
-                  </div>
-                ) : round2State?.gameState?.status === "answered_wrong" ? (
-                  <div className="text-red-400 text-lg font-semibold">
-                    ✗ Trả lời sai. Chờ MC xác nhận...
                   </div>
                 ) : round2State?.gameState?.status === "round_finished" ? (
                   <div className="text-neon-green text-lg font-bold">
@@ -500,53 +571,135 @@ export default function StagePage() {
                 )}
               </div>
 
-              {/* Input đáp án - chỉ hiển thị khi question_open và chưa gửi đáp án */}
-              {round2State?.gameState?.status === "question_open" && round2State?.gameState?.activeQuestionId && !round2State?.gameState?.lastAnswerInput && (
+              {/* Input đáp án - chỉ hiển thị khi question_open và đội đã đăng nhập */}
+              {round2State?.gameState?.status === "question_open" && 
+               round2State?.gameState?.activeQuestionId && 
+               round2TeamId && 
+               team && (() => {
+                 const myTeam = round2State?.teams?.find((t: any) => t.id === round2TeamId);
+                 const isLocked = myTeam?.isLocked || false;
+                 const timeLeft = round2State?.gameState?.timeLeft || 0;
+                 const isTimeUp = timeLeft <= 0;
+                 
+                 return (
                 <div className="mb-4 space-y-2">
+                     {isLocked ? (
+                       <div className="p-3 bg-red-900/30 border border-red-600 rounded-lg">
+                         <div className="text-red-400 text-sm font-semibold">⚠️ Đội của bạn đã bị khóa</div>
+                         <div className="text-gray-400 text-xs mt-1">Không thể trả lời câu hỏi và bấm chuông</div>
+                       </div>
+                     ) : isTimeUp ? (
+                       <div className="p-3 bg-gray-900/30 border border-gray-600 rounded-lg">
+                         <div className="text-gray-400 text-sm font-semibold">⏰ Đã hết thời gian</div>
+                         <div className="text-gray-500 text-xs mt-1">Không thể gửi đáp án nữa</div>
+                       </div>
+                     ) : (
+                       <>
+                         {/* Kiểm tra xem đội đã submit đáp án chưa */}
+                         {(() => {
+                           const myAnswer = round2State?.gameState?.teamAnswers?.find(
+                             (ta: any) => ta.teamId === round2TeamId
+                           );
+                          if (myAnswer) {
+                            return (
+                              <div className="p-4 bg-gradient-to-br from-slate-800/90 to-slate-900/90 border-2 border-green-500/50 rounded-lg shadow-lg shadow-green-500/20">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <div className="text-green-400 text-lg">✓</div>
+                                  <div className="text-sm font-semibold text-green-400">Đã gửi đáp án thành công!</div>
+                                </div>
+                                <div className="text-sm text-gray-300 mb-2">Đáp án của bạn:</div>
+                                <div className="text-white font-bold text-lg mb-3 p-2 bg-slate-700/50 rounded border border-slate-600">
+                                  {myAnswer.answer || "(Trống)"}
+                                </div>
+                                {myAnswer.isCorrect === true && (
+                                  <div className="flex items-center gap-2 text-green-400 text-sm font-semibold p-2 bg-green-500/20 rounded border border-green-500/50">
+                                    <span className="text-lg">✓</span>
+                                    <span>Đúng - Bạn đã nhận được điểm!</span>
+                                  </div>
+                                )}
+                                {myAnswer.isCorrect === false && (
+                                  <div className="flex items-center gap-2 text-red-400 text-sm font-semibold p-2 bg-red-500/20 rounded border border-red-500/50">
+                                    <span className="text-lg">✗</span>
+                                    <span>Sai - Không mất điểm</span>
+                                  </div>
+                                )}
+                                {myAnswer.isCorrect === null && (
+                                  <div className="flex items-center gap-2 text-yellow-400 text-sm font-semibold p-2 bg-yellow-500/20 rounded border border-yellow-500/50 animate-pulse">
+                                    <span className="text-lg">⏳</span>
+                                    <span>Chờ MC chấm điểm...</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                           return (
                   <form
                     onSubmit={async (e) => {
                       e.preventDefault();
-                      if (!round2AnswerInput.trim()) return;
+                                 if (!round2AnswerInput.trim() || !round2TeamId || isTimeUp) return;
 
                       try {
                         const res = await fetch("/api/round2/state", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({
-                            action: "setGameState",
+                                       action: "submitAnswer",
                             data: {
-                              lastAnswerInput: round2AnswerInput.trim(),
-                              status: "waiting_confirmation",
+                                         teamId: round2TeamId,
+                                         teamName: team.teamName,
+                                         answer: round2AnswerInput.trim(),
                             },
                           }),
                         });
                         if (res.ok) {
                           setRound2AnswerInput("");
+                                     const loadRes = await fetch("/api/round2/state");
+                                     const loadData = await loadRes.json();
+                                     setRound2State(loadData);
+                        } else {
+                          // Xử lý lỗi nếu API trả về lỗi (ví dụ: đã submit rồi)
+                          const errorData = await res.json();
+                          console.error("Error submitting answer:", errorData.error);
+                          // Reload state để cập nhật UI
+                          const loadRes = await fetch("/api/round2/state");
+                          const loadData = await loadRes.json();
+                          setRound2State(loadData);
                         }
                       } catch (error) {
                         console.error("Error submitting answer:", error);
                       }
                     }}
-                    className="flex gap-2"
+                    className="flex flex-col gap-2"
                   >
-                    <input
-                      type="text"
-                      value={round2AnswerInput}
-                      onChange={(e) => setRound2AnswerInput(e.target.value)}
-                      placeholder="Nhập câu trả lời..."
-                      disabled={round2State?.gameState?.status !== "question_open"}
-                      className="flex-1 px-4 py-3 bg-slate-800/80 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neon-blue disabled:opacity-50"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!round2AnswerInput.trim() || round2State?.gameState?.status !== "question_open"}
-                      className="px-6 py-3 bg-neon-blue hover:bg-neon-blue/80 text-white font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Gửi
-                    </button>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={round2AnswerInput}
+                        onChange={(e) => setRound2AnswerInput(e.target.value)}
+                        placeholder="Nhập câu trả lời..."
+                                   disabled={round2State?.gameState?.status !== "question_open" || isTimeUp}
+                                   className="flex-1 px-4 py-3 bg-slate-800/80 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neon-blue disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                      <button
+                        type="submit"
+                                   disabled={!round2AnswerInput.trim() || round2State?.gameState?.status !== "question_open" || isTimeUp}
+                        className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold rounded-lg transition-all duration-200 shadow-lg shadow-green-500/50 hover:shadow-green-500/70 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                      >
+                        ✓ Gửi
+                      </button>
+                    </div>
+                    {/* Thông báo hướng dẫn */}
+                    <div className="text-xs text-gray-400 italic">
+                      💡 Sau khi gửi, đáp án của bạn sẽ được hiển thị và chờ MC chấm điểm
+                    </div>
                   </form>
-                </div>
+                           );
+                         })()}
+                       </>
               )}
+                   </div>
+                 );
+               })()}
 
               {/* Đồng hồ cát dạng thanh đứng dọc */}
               <div className="absolute bottom-6 left-6 flex items-end gap-3">
@@ -610,39 +763,96 @@ export default function StagePage() {
               </div>
             </div>
 
-            {/* Bottom-Right: Live studio feed (placeholder) */}
-            <div
-              className="bg-red-950/40 rounded-xl border-2 border-red-700/40 relative overflow-hidden"
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(69, 10, 10, 0.5), rgba(127, 29, 29, 0.4), rgba(185, 28, 28, 0.3))",
-                backgroundImage: `linear-gradient(to right, rgba(148, 163, 184, 0.05) 1px, transparent 1px),
-                  linear-gradient(to bottom, rgba(148, 163, 184, 0.05) 1px, transparent 1px)`,
-                backgroundSize: "40px 40px",
-              }}
-            >
-              <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-                <div className="text-white text-3xl font-bold mb-6 tracking-wider">
-                  PVOIL VŨNG ÁNG
-                </div>
-
-                <div className="flex gap-4 justify-center items-end flex-1 w-full max-w-5xl px-4">
-                  {[60, 30, 65, 35, 40].map((score, index) => (
-                    <div
-                      key={index}
-                      className="flex-1 max-w-[140px] bg-white/15 border border-white/25 rounded-xl flex flex-col items-center justify-end pb-4 pt-6 backdrop-blur-md shadow-xl"
-                      style={{ height: "220px" }}
+            {/* Ô 4: Nút rung chuông */}
+            <div className="bg-slate-950/95 rounded-xl p-6 border border-slate-700/50 relative overflow-hidden flex flex-col items-center justify-center">
+              {(() => {
+                const myTeam = round2State?.teams?.find((t: any) => t.id === round2TeamId);
+                const isLocked = myTeam?.isLocked || false;
+                const buzzerPresses = round2State?.gameState?.buzzerPresses || [];
+                const isMyBuzzer = buzzerPresses.some((bp: any) => bp.teamId === round2TeamId);
+                const firstBuzzerTeam = buzzerPresses.length > 0 ? buzzerPresses[0] : null;
+                // Cho phép bấm chuông ở mọi trạng thái (trừ khi bị khóa hoặc đã bấm rồi)
+                const canPressBuzzer = !isLocked && !isMyBuzzer;
+                
+                return (
+                  <>
+                    {/* Visual effect khi đội này bấm chuông */}
+                    {isMyBuzzer && (
+                      <div className="absolute inset-0 bg-yellow-400/30 animate-pulse rounded-xl" />
+                    )}
+                    
+                    <button
+                      onClick={async () => {
+                        if (!canPressBuzzer || !round2TeamId || !team) return;
+                        
+                        try {
+                          const res = await fetch("/api/round2/state", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              action: "pressBuzzer",
+                              data: {
+                                teamId: round2TeamId,
+                                teamName: team.teamName,
+                              },
+                            }),
+                          });
+                          if (res.ok) {
+                            const loadRes = await fetch("/api/round2/state");
+                            const loadData = await loadRes.json();
+                            setRound2State(loadData);
+                          } else {
+                            const errorData = await res.json();
+                            alert(errorData.error || "Không thể bấm chuông");
+                          }
+                        } catch (error) {
+                          console.error("Error pressing buzzer:", error);
+                          alert("Lỗi khi bấm chuông");
+                        }
+                      }}
+                      disabled={!canPressBuzzer}
+                      className={`group relative w-48 h-48 rounded-full shadow-2xl transition-all duration-300 flex items-center justify-center ${
+                        isLocked
+                          ? "bg-gray-600 cursor-not-allowed opacity-50"
+                          : isMyBuzzer
+                          ? "bg-gradient-to-br from-green-500 via-green-400 to-emerald-500 hover:shadow-green-500/50 hover:scale-105"
+                          : "bg-gradient-to-br from-yellow-500 via-yellow-400 to-orange-500 hover:shadow-yellow-500/50 hover:scale-105 active:scale-95"
+                      }`}
                     >
-                      <div className="w-full h-14 bg-blue-600/90 rounded-lg mb-3 flex items-center justify-center border border-blue-400/30 shadow-inner">
-                        <div className="text-white font-bold text-2xl">
-                          {score}
+                      {/* Glow effect */}
+                      {!isLocked && !isMyBuzzer && (
+                        <div className="absolute inset-0 rounded-full bg-yellow-400/30 blur-xl group-hover:bg-yellow-400/50 transition-all duration-300" />
+                      )}
+                      {isMyBuzzer && (
+                        <div className="absolute inset-0 rounded-full bg-green-400/50 blur-xl animate-pulse" />
+                      )}
+                      
+                      {/* Bell icon */}
+                      <Bell className={`w-24 h-24 text-white drop-shadow-lg ${isMyBuzzer ? "animate-bounce" : "group-hover:animate-pulse"}`} strokeWidth={2.5} />
+                      
+                      {/* Ripple effect */}
+                      {!isLocked && !isMyBuzzer && (
+                        <div className="absolute inset-0 rounded-full border-4 border-yellow-300/50 animate-ping opacity-0 group-hover:opacity-100" />
+                      )}
+                      {isMyBuzzer && (
+                        <div className="absolute inset-0 rounded-full border-4 border-green-300/50 animate-ping" />
+                      )}
+                    </button>
+                    
+                    {/* Label */}
+                    <div className="mt-6 text-center">
+                      <div className={`text-xl font-bold mb-1 ${
+                        isLocked ? "text-gray-500" : isMyBuzzer ? "text-green-400" : "text-white"
+                      }`}>
+                        {isLocked ? "ĐÃ BỊ KHÓA" : isMyBuzzer ? "ĐÃ BẤM CHUÔNG" : "RUNG CHUÔNG"}
                         </div>
+                      <div className="text-gray-400 text-sm">
+                        {isLocked ? "Không thể tham gia" : isMyBuzzer ? "Chờ MC chấm điểm" : firstBuzzerTeam ? `Đội bấm trước: ${firstBuzzerTeam.teamName}` : "Nhấn để rung chuông"}
                       </div>
-                      <div className="w-full h-3 bg-gray-400/40 rounded-b-xl" />
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </>
+                );
+              })()}
             </div>
           </motion.div>
         ) : currentRound === "khoi-dong" &&

@@ -27,26 +27,6 @@ export function TeamControls({
 }: TeamControlsProps) {
   return (
     <div className="space-y-4">
-      {/* Team selector */}
-      <div>
-        <label className="block text-white text-sm font-medium mb-2">
-          Chọn đội thi:
-        </label>
-        <select
-          value={activeTeamId || ""}
-          onChange={(e) => onSelectTeam(Number(e.target.value))}
-          disabled={disabled}
-          className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-neon-blue disabled:opacity-50"
-        >
-          <option value="">-- Chọn đội --</option>
-          {teams.map((team) => (
-            <option key={team.id} value={team.id}>
-              {team.name} ({team.score} điểm)
-            </option>
-          ))}
-        </select>
-      </div>
-
       {/* Tile selector */}
       <div>
         <label className="block text-white text-sm font-medium mb-2">
