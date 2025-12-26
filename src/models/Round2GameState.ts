@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 import { Round2GameState, Round2TeamAnswer, Round2BuzzerPress } from "@/lib/round2/types";
 
 export interface IRound2GameState extends Document {
+  key: string; // Unique key để identify document duy nhất (sẽ là "current")
   status: "idle" | "tile_selected" | "question_open" | "waiting_confirmation" | "answered_correct" | "answered_wrong" | "round_finished";
   activeTeamId: number | null;
   activeQuestionId: 1 | 2 | 3 | 4 | null;
@@ -35,6 +36,12 @@ const Round2BuzzerPressSchema = new Schema({
 
 const Round2GameStateSchema = new Schema<IRound2GameState>(
   {
+    key: {
+      type: String,
+      required: true,
+      unique: true,
+      default: "current",
+    },
     status: {
       type: String,
       enum: ["idle", "tile_selected", "question_open", "waiting_confirmation", "answered_correct", "answered_wrong", "round_finished"],
@@ -66,31 +73,94 @@ interface IRound2GameStateModel extends Model<IRound2GameState> {
 }
 
 (Round2GameStateSchema.statics as any).getCurrent = async function() {
-  let doc = await this.findOne({ _id: "current" });
-  if (!doc) {
-    doc = await this.create({
-      _id: "current",
-      status: "idle",
-      activeTeamId: null,
-      activeQuestionId: null,
-      timeLeft: 15,
-      lastAnswerInput: "",
-      teamAnswers: [],
-      guessedKeywordCorrect: false,
-      buzzerPresses: [],
-      buzzerTeamId: null,
-      buzzerTeamName: null,
-      buzzerTimestamp: null,
-      questionStartTime: null,
-      questionInitialTime: null,
-    });
+  try {
+    // Sử dụng findOne với query rõ ràng trên field 'key', không phải '_id'
+    let doc = await this.findOne({ key: "current" });
+    if (!doc) {
+      // Nếu không tìm thấy, thử tạo mới
+      try {
+        doc = await this.create({
+          key: "current",
+          status: "idle",
+          activeTeamId: null,
+          activeQuestionId: null,
+          timeLeft: 15,
+          lastAnswerInput: "",
+          teamAnswers: [],
+          guessedKeywordCorrect: false,
+          buzzerPresses: [],
+          buzzerTeamId: null,
+          buzzerTeamName: null,
+          buzzerTimestamp: null,
+          questionStartTime: null,
+          questionInitialTime: null,
+        });
+      } catch (createError: any) {
+        // Nếu bị duplicate key error, có nghĩa là document tồn tại nhưng findOne không tìm thấy
+        // Có thể do _id không hợp lệ. Thử xóa tất cả và tạo lại
+        if (createError.code === 11000 || (createError.message && createError.message.includes("duplicate key"))) {
+          // Xóa tất cả documents (bao gồm cả document có _id không hợp lệ)
+          await this.deleteMany({});
+          // Tìm lại sau khi xóa
+          doc = await this.findOne({ key: "current" });
+          if (!doc) {
+            // Nếu vẫn không có, tạo mới
+            doc = await this.create({
+              key: "current",
+              status: "idle",
+              activeTeamId: null,
+              activeQuestionId: null,
+              timeLeft: 15,
+              lastAnswerInput: "",
+              teamAnswers: [],
+              guessedKeywordCorrect: false,
+              buzzerPresses: [],
+              buzzerTeamId: null,
+              buzzerTeamName: null,
+              buzzerTimestamp: null,
+              questionStartTime: null,
+              questionInitialTime: null,
+            });
+          }
+        } else {
+          throw createError;
+        }
+      }
+    }
+    return doc;
+  } catch (error: any) {
+    // Nếu có lỗi ObjectId, thử xóa tất cả và tạo lại
+    if (error.message && error.message.includes("ObjectId")) {
+      try {
+        await this.deleteMany({});
+        return await this.create({
+          key: "current",
+          status: "idle",
+          activeTeamId: null,
+          activeQuestionId: null,
+          timeLeft: 15,
+          lastAnswerInput: "",
+          teamAnswers: [],
+          guessedKeywordCorrect: false,
+          buzzerPresses: [],
+          buzzerTeamId: null,
+          buzzerTeamName: null,
+          buzzerTimestamp: null,
+          questionStartTime: null,
+          questionInitialTime: null,
+        });
+      } catch (retryError) {
+        throw retryError;
+      }
+    }
+    throw error;
   }
-  return doc;
 };
 
 (Round2GameStateSchema.statics as any).updateCurrent = async function(updates: Partial<IRound2GameState>) {
+  // Sử dụng query rõ ràng trên field 'key', không phải '_id'
   await this.findOneAndUpdate(
-    { _id: "current" },
+    { key: "current" },
     { $set: updates },
     { upsert: true, new: true }
   );

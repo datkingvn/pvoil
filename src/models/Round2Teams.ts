@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 import { Round2Team } from "@/lib/round2/types";
 
 export interface IRound2Teams extends Document {
+  key: string; // Unique key để identify document duy nhất (sẽ là "current")
   teams: Round2Team[];
   createdAt: Date;
   updatedAt: Date;
@@ -16,6 +17,12 @@ const Round2TeamSchema = new Schema({
 
 const Round2TeamsSchema = new Schema<IRound2Teams>(
   {
+    key: {
+      type: String,
+      required: true,
+      unique: true,
+      default: "current",
+    },
     teams: {
       type: [Round2TeamSchema],
       default: [],
@@ -33,10 +40,10 @@ interface IRound2TeamsModel extends Model<IRound2Teams> {
 }
 
 (Round2TeamsSchema.statics as any).getCurrent = async function() {
-  let doc = await this.findOne({ _id: "current" });
+  let doc = await this.findOne({ key: "current" });
   if (!doc) {
     doc = await this.create({
-      _id: "current",
+      key: "current",
       teams: [],
     });
   }
@@ -45,7 +52,7 @@ interface IRound2TeamsModel extends Model<IRound2Teams> {
 
 (Round2TeamsSchema.statics as any).updateCurrent = async function(teams: Round2Team[]) {
   await this.findOneAndUpdate(
-    { _id: "current" },
+    { key: "current" },
     { $set: { teams } },
     { upsert: true, new: true }
   );
