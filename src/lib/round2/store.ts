@@ -15,6 +15,8 @@ let round2State: Round2State = {
     buzzerTeamId: null,
     buzzerTeamName: null,
     buzzerTimestamp: null,
+    questionStartTime: null,
+    questionInitialTime: null,
   },
   teams: [],
 };
@@ -53,6 +55,8 @@ export function resetRound2GameState(): void {
     buzzerTeamId: null,
     buzzerTeamName: null,
     buzzerTimestamp: null,
+    questionStartTime: null,
+    questionInitialTime: null,
   };
 }
 

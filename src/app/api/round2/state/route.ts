@@ -94,6 +94,16 @@ export async function GET() {
     }
     
     const updatedState = getRound2State();
+    
+    // Tính toán timeLeft dựa trên questionStartTime nếu status = "question_open"
+    if (updatedState.gameState.status === "question_open" && 
+        updatedState.gameState.questionStartTime !== null && 
+        updatedState.gameState.questionInitialTime !== null) {
+      const elapsed = Math.floor((Date.now() - updatedState.gameState.questionStartTime) / 1000);
+      const calculatedTimeLeft = Math.max(0, updatedState.gameState.questionInitialTime - elapsed);
+      updatedState.gameState.timeLeft = calculatedTimeLeft;
+    }
+    
     return NextResponse.json(updatedState);
   } catch (error) {
     console.error("Error getting round2 state:", error);
@@ -145,7 +155,33 @@ export async function POST(request: NextRequest) {
 
       case "setGameState": {
         const gameState = data as Partial<Round2GameState>;
+        const currentState = getRound2State();
+        
+        // Nếu status chuyển sang "question_open", lưu timestamp và initial time
+        if (gameState.status === "question_open" && currentState.gameState.status !== "question_open") {
+          gameState.questionStartTime = Date.now();
+          gameState.questionInitialTime = gameState.timeLeft !== undefined ? gameState.timeLeft : 15;
+          gameState.timeLeft = gameState.timeLeft !== undefined ? gameState.timeLeft : 15;
+        }
+        
+        // Nếu status chuyển sang không phải "question_open", reset timestamp
+        if (gameState.status !== undefined && gameState.status !== "question_open" && currentState.gameState.status === "question_open") {
+          gameState.questionStartTime = null;
+          gameState.questionInitialTime = null;
+        }
+        
         setRound2GameState(gameState);
+        const updatedState = getRound2State();
+        
+        // Tính toán timeLeft nếu đang trong trạng thái question_open
+        if (updatedState.gameState.status === "question_open" && 
+            updatedState.gameState.questionStartTime !== null && 
+            updatedState.gameState.questionInitialTime !== null) {
+          const elapsed = Math.floor((Date.now() - updatedState.gameState.questionStartTime) / 1000);
+          const calculatedTimeLeft = Math.max(0, updatedState.gameState.questionInitialTime - elapsed);
+          setRound2GameState({ timeLeft: calculatedTimeLeft });
+        }
+        
         return NextResponse.json({ success: true, state: getRound2State() });
       }
 

@@ -50,7 +50,7 @@ export interface Round2GameState {
   status: Round2GameStatus;
   activeTeamId: number | null;
   activeQuestionId: 1 | 2 | 3 | 4 | null;
-  timeLeft: number; // 0-15
+  timeLeft: number; // 0-15 (initial time, calculated from questionStartTime on GET)
   lastAnswerInput: string; // Giữ lại để backward compatibility
   teamAnswers: Round2TeamAnswer[]; // Đáp án của các đội cho câu hỏi hiện tại
   guessedKeywordCorrect: boolean;
@@ -60,6 +60,8 @@ export interface Round2GameState {
   buzzerTeamId: number | null; // Đội nào bấm chuông trước (đội đầu tiên)
   buzzerTeamName: string | null; // Tên đội bấm chuông trước
   buzzerTimestamp: number | null; // Thời điểm bấm chuông trước
+  questionStartTime: number | null; // Timestamp khi câu hỏi bắt đầu (status = "question_open")
+  questionInitialTime: number | null; // Thời gian ban đầu khi bắt đầu câu hỏi (thường là 15)
 }
 
 export interface Round2State {
