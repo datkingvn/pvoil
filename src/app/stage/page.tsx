@@ -144,14 +144,32 @@ export default function StagePage() {
         try {
           const res = await fetch("/api/round2/state");
           const data = await res.json();
-          setRound2State(data);
+          // Khi timer đang chạy (question_open), giữ nguyên timeLeft từ timer client
+          // Chỉ update các field khác để tránh làm timer nhảy
+          setRound2State((prev: any) => {
+            // Nếu không có prev state hoặc status thay đổi, update toàn bộ
+            if (!prev || prev.gameState?.status !== data?.gameState?.status) {
+              return data;
+            }
+            // Nếu timer đang chạy và status không đổi, giữ nguyên timeLeft từ timer client
+            if (prev.gameState?.status === "question_open" && data?.gameState?.status === "question_open") {
+              return {
+                ...data,
+                gameState: {
+                  ...data.gameState,
+                  timeLeft: prev.gameState.timeLeft, // Giữ nguyên timeLeft từ timer client
+                },
+              };
+            }
+            return data;
+          });
         } catch (error) {
           console.error("Error loading round2 state:", error);
         }
       };
       loadRound2State();
-      // Poll state mỗi 2 giây để sync real-time (giảm từ 500ms để tránh giật UI)
-      const interval = setInterval(loadRound2State, 2000);
+      // Poll state mỗi 1 giây để sync real-time và timer chính xác
+      const interval = setInterval(loadRound2State, 1000);
       return () => clearInterval(interval);
     } else {
       setRound2State(null);
