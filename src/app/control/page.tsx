@@ -97,8 +97,8 @@ export default function ControlPage() {
         }
       };
       loadRound2State();
-      // Poll state mỗi 1s để sync
-      const interval = setInterval(loadRound2State, 1000);
+      // Poll state mỗi 2 giây để sync (tối ưu để tránh giật UI)
+      const interval = setInterval(loadRound2State, 2000);
       return () => clearInterval(interval);
     } else {
       setRound2State(null);
@@ -130,9 +130,17 @@ export default function ControlPage() {
   useEffect(() => {
     if (currentRound) {
       // Check if questions are loaded after loadQuestions completes
-      const hasQuestions = currentRound === "khoi-dong"
-        ? khoiDongPackages.some((pkg) => pkg.length > 0)
-        : questions[currentRound]?.length > 0;
+      // Vòng 2 sử dụng round2State.config.questions thay vì questions[currentRound]
+      let hasQuestions = false;
+      if (currentRound === "khoi-dong") {
+        hasQuestions = khoiDongPackages.some((pkg) => pkg.length > 0);
+      } else if (currentRound === "vuot-chuong-ngai-vat") {
+        // Kiểm tra round2State.config.questions cho vòng 2
+        hasQuestions = round2State?.config?.questions?.length > 0 && 
+          round2State.config.questions.some((q: any) => q.questionText && q.questionText.trim() !== "");
+      } else {
+        hasQuestions = questions[currentRound]?.length > 0;
+      }
 
       // Only show toast if we haven't shown it for this round yet, or if questions changed
       if (!hasQuestions && currentRound === lastCheckedRoundRef.current && currentRound !== lastToastRoundRef.current) {
@@ -171,7 +179,7 @@ export default function ControlPage() {
         clearTimeout(toastTimeoutRef.current);
       }
     };
-  }, [currentRound, khoiDongPackages, questions]);
+  }, [currentRound, khoiDongPackages, questions, round2State]);
 
   // Hotkeys
   useHotkeys("space", (e) => {

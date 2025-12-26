@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { TileGrid } from "@/components/round2/TileGrid";
 import { ObstacleDisplay } from "@/components/round2/ObstacleDisplay";
 import { QuestionPanel } from "@/components/round2/QuestionPanel";
@@ -22,6 +22,7 @@ export default function Round2PlayPage() {
   const [keywordInput, setKeywordInput] = useState("");
   const [answerInput, setAnswerInput] = useState("");
   const [round2TeamId, setRound2TeamId] = useState<number | null>(null); // Map team từ DB sang Round2Team id
+  const syncCounterRef = useRef(0); // Đếm số lần để sync với server mỗi 5 giây
 
   // Load state từ API
   const loadState = useCallback(async () => {
@@ -36,8 +37,8 @@ export default function Round2PlayPage() {
 
   useEffect(() => {
     loadState();
-    // Poll state mỗi 500ms để sync real-time
-    const interval = setInterval(loadState, 500);
+    // Poll state mỗi 2 giây để sync real-time (giảm từ 500ms để tránh giật UI)
+    const interval = setInterval(loadState, 2000);
     return () => clearInterval(interval);
   }, [loadState]);
 
@@ -54,14 +55,18 @@ export default function Round2PlayPage() {
     }
   }, [team, state?.teams]);
 
-  // Timer countdown
+  // Timer countdown - tối ưu để tránh re-render không cần thiết
   useEffect(() => {
     if (!state?.gameState) return;
     if (state.gameState.status !== "question_open") return;
     if (state.gameState.timeLeft <= 0) {
       // Hết thời gian => chỉ dừng timer, không tự động submit
+      syncCounterRef.current = 0; // Reset counter khi timer dừng
       return;
     }
+
+    // Reset counter khi timer mới bắt đầu
+    syncCounterRef.current = 0;
 
     const timer = setInterval(() => {
       setState((prev) => {
@@ -71,15 +76,18 @@ export default function Round2PlayPage() {
         }
         
         const newTimeLeft = prev.gameState.timeLeft - 1;
+        syncCounterRef.current++;
+
         if (newTimeLeft <= 0) {
           clearInterval(timer);
+          syncCounterRef.current = 0;
           // Hết thời gian => chỉ cập nhật timeLeft = 0, giữ nguyên status
           const updatedState = {
             ...prev,
             gameState: { ...prev.gameState, timeLeft: 0 },
           };
           
-          // Sync với server
+          // Sync với server khi hết thời gian
           updateGameState({ timeLeft: 0 }).catch(console.error);
           
           return updatedState;
@@ -91,15 +99,22 @@ export default function Round2PlayPage() {
           gameState: { ...prev.gameState, timeLeft: newTimeLeft },
         };
         
-        // Sync với server
-        updateGameState({ timeLeft: newTimeLeft }).catch(console.error);
+        // Sync với server mỗi 5 giây thay vì mỗi giây để giảm tải
+        if (syncCounterRef.current >= 5) {
+          syncCounterRef.current = 0;
+          updateGameState({ timeLeft: newTimeLeft }).catch(console.error);
+        }
         
         return updatedState;
       });
     }, 1000);
 
-    return () => clearInterval(timer);
-  }, [state?.gameState?.status, state?.gameState?.timeLeft]);
+    return () => {
+      clearInterval(timer);
+      syncCounterRef.current = 0;
+    };
+    // Loại bỏ state?.gameState?.timeLeft khỏi dependencies để tránh vòng lặp re-render
+  }, [state?.gameState?.status]);
 
   const updateGameState = async (updates: Partial<Round2GameState>) => {
     try {
@@ -108,9 +123,8 @@ export default function Round2PlayPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "setGameState", data: updates }),
       });
-      if (res.ok) {
-        loadState();
-      }
+      // Không gọi loadState() ngay lập tức để tránh re-render không cần thiết
+      // State sẽ được sync qua polling interval
     } catch (error) {
       console.error("Error updating game state:", error);
     }

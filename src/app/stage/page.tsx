@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useGameStore } from "@/lib/store";
@@ -118,6 +118,7 @@ export default function StagePage() {
   const [round2State, setRound2State] = useState<any>(null);
   const [round2AnswerInput, setRound2AnswerInput] = useState("");
   const [round2TeamId, setRound2TeamId] = useState<number | null>(null);
+  const syncCounterRef = useRef(0); // Đếm số lần để sync với server mỗi 5 giây
 
   const {
     currentRound,
@@ -149,8 +150,8 @@ export default function StagePage() {
         }
       };
       loadRound2State();
-      // Poll state mỗi 500ms để sync real-time
-      const interval = setInterval(loadRound2State, 500);
+      // Poll state mỗi 2 giây để sync real-time (giảm từ 500ms để tránh giật UI)
+      const interval = setInterval(loadRound2State, 2000);
       return () => clearInterval(interval);
     } else {
       setRound2State(null);
@@ -165,15 +166,19 @@ export default function StagePage() {
     }
   }, [currentRound, team, router]);
 
-  // Timer countdown cho round2
+  // Timer countdown cho round2 - tối ưu để tránh re-render không cần thiết
   useEffect(() => {
     if (currentRound !== "vuot-chuong-ngai-vat") return;
     if (!round2State?.gameState) return;
     if (round2State.gameState.status !== "question_open") return;
     if (round2State.gameState.timeLeft <= 0) {
       // Hết thời gian => chỉ dừng timer, không đổi status
+      syncCounterRef.current = 0; // Reset counter khi timer dừng
       return;
     }
+
+    // Reset counter khi timer mới bắt đầu
+    syncCounterRef.current = 0;
 
     const timer = setInterval(() => {
       setRound2State((prev: any) => {
@@ -183,15 +188,18 @@ export default function StagePage() {
         }
 
         const newTimeLeft = prev.gameState.timeLeft - 1;
+        syncCounterRef.current++;
+
         if (newTimeLeft <= 0) {
           clearInterval(timer);
+          syncCounterRef.current = 0;
           // Hết thời gian => chỉ cập nhật timeLeft = 0, giữ nguyên status "question_open"
           const updatedState = {
             ...prev,
             gameState: { ...prev.gameState, timeLeft: 0 },
           };
 
-          // Sync với server
+          // Sync với server khi hết thời gian
           fetch("/api/round2/state", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -210,22 +218,29 @@ export default function StagePage() {
           gameState: { ...prev.gameState, timeLeft: newTimeLeft },
         };
 
-        // Sync với server mỗi giây
-        fetch("/api/round2/state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "setGameState",
-            data: { timeLeft: newTimeLeft },
-          }),
-        }).catch(console.error);
+        // Sync với server mỗi 5 giây thay vì mỗi giây để giảm tải
+        if (syncCounterRef.current >= 5) {
+          syncCounterRef.current = 0;
+          fetch("/api/round2/state", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "setGameState",
+              data: { timeLeft: newTimeLeft },
+            }),
+          }).catch(console.error);
+        }
 
         return updatedState;
       });
     }, 1000);
 
-    return () => clearInterval(timer);
-  }, [currentRound, round2State?.gameState?.status, round2State?.gameState?.timeLeft]);
+    return () => {
+      clearInterval(timer);
+      syncCounterRef.current = 0;
+    };
+    // Loại bỏ round2State?.gameState?.timeLeft khỏi dependencies để tránh vòng lặp re-render
+  }, [currentRound, round2State?.gameState?.status]);
 
   useEffect(() => {
     loadTeams();
