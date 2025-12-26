@@ -14,13 +14,16 @@ export function Timer() {
     const interval = setInterval(() => {
       timerTick();
       
-      if (timerSeconds <= 5 && timerSeconds > 0 && soundEnabled) {
+      // Lấy giá trị timerSeconds mới nhất từ store để kiểm tra âm thanh
+      const currentSeconds = useGameStore.getState().timerSeconds;
+      if (currentSeconds <= 5 && currentSeconds > 0 && soundEnabled) {
         soundManager.playCountdown();
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timerRunning, timerSeconds, timerTick, soundEnabled]);
+    // Loại bỏ timerSeconds khỏi dependencies để tránh tạo lại interval mỗi giây
+  }, [timerRunning, timerTick, soundEnabled]);
 
   const isLowTime = timerSeconds <= 5;
   const minutes = Math.floor(timerSeconds / 60);

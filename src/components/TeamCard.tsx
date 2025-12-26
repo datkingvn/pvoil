@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { motion } from "framer-motion";
 import { TeamScore } from "@/lib/types";
 
@@ -8,7 +9,7 @@ interface TeamCardProps {
   isActive?: boolean;
 }
 
-export function TeamCard({ team, isActive = false }: TeamCardProps) {
+export const TeamCard = memo(function TeamCard({ team, isActive = false }: TeamCardProps) {
   return (
     <motion.div
       className={`
@@ -43,5 +44,5 @@ export function TeamCard({ team, isActive = false }: TeamCardProps) {
       </div>
     </motion.div>
   );
-}
+});
 

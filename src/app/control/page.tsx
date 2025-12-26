@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useGameStore } from "@/lib/store";
@@ -30,6 +30,24 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useMcAuth } from "@/hooks/useMcAuth";
+
+// Component timer riêng để tránh re-render control page mỗi giây
+const ControlTimer = memo(() => {
+  const timerSeconds = useGameStore((state) => state.timerSeconds);
+  return (
+    <div className="absolute bottom-4 right-4 bg-black/60 px-4 py-2 rounded-lg border border-neon-blue/40 shadow-lg shadow-black/40">
+      <div
+        className={`text-2xl font-bold tabular-nums ${
+          timerSeconds <= 5 && timerSeconds > 0 ? "text-red-400" : "text-neon-blue"
+        }`}
+      >
+        {String(Math.floor(timerSeconds / 60)).padStart(2, "0")}:
+        {String(timerSeconds % 60).padStart(2, "0")}
+      </div>
+    </div>
+  );
+});
+ControlTimer.displayName = "ControlTimer";
 
 export default function ControlPage() {
   useBroadcastSync(); // Sync với các tab cùng máy
@@ -795,16 +813,7 @@ export default function ControlPage() {
               <div className="h-[300px] mb-4 relative">
                 <QuestionDisplay hideQAType={true} />
                 {/* Timer cho MC - dạng số, hiển thị gọn ở góc dưới bên phải */}
-                <div className="absolute bottom-4 right-4 bg-black/60 px-4 py-2 rounded-lg border border-neon-blue/40 shadow-lg shadow-black/40">
-                  <div
-                    className={`text-2xl font-bold tabular-nums ${
-                      timerSeconds <= 5 && timerSeconds > 0 ? "text-red-400" : "text-neon-blue"
-                    }`}
-                  >
-                    {String(Math.floor(timerSeconds / 60)).padStart(2, "0")}:
-                    {String(timerSeconds % 60).padStart(2, "0")}
-                  </div>
-                </div>
+                <ControlTimer />
               </div>
               
               {/* Hiển thị ai bấm chuông và nút chấm điểm từ khóa */}
