@@ -384,7 +384,7 @@ export default function RoundQuestionsPage() {
     );
   };
 
-  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>, questionId: number) => {
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>, questionId: 1 | 2 | 3 | 4) => {
     const file = e.target.files?.[0];
     if (!file) return;
 

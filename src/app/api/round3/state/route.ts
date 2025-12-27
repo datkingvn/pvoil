@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Round3Config, Round3GameState, Round3Team, Round3State, Round3TeamAnswer } from "@/lib/round3/types";
+import { Round3Config, Round3GameState, Round3Team, Round3State, Round3TeamAnswer, Round3GameStatus } from "@/lib/round3/types";
 import connectDB from "@/lib/mongodb";
 import Team from "@/models/Team";
 import Round3ConfigModel from "@/models/Round3Config";
@@ -42,8 +42,8 @@ async function loadGameStateFromDB(): Promise<Round3GameState> {
   await connectDB();
   const doc = await Round3GameStateModel.getCurrent();
   const gameState: Round3GameState = {
-    status: doc.status,
-    activeQuestionId: doc.activeQuestionId,
+    status: doc.status as Round3GameStatus,
+    activeQuestionId: doc.activeQuestionId as 1 | 2 | 3 | 4 | null,
     timeLeft: doc.timeLeft,
     teamAnswers: doc.teamAnswers || [],
     questionStartTime: doc.questionStartTime,
