@@ -184,6 +184,14 @@ export default function StagePage() {
     }
   }, [currentRound, team, router]);
 
+  // Tự động redirect sang trang vòng 3 khi MC chuyển round
+  useEffect(() => {
+    if (team && currentRound === "tang-toc") {
+      // Redirect đến trang vòng 3
+      router.push("/round3/play");
+    }
+  }, [currentRound, team, router]);
+
   // Timer countdown cho round2 - tối ưu để tránh re-render không cần thiết
   useEffect(() => {
     if (currentRound !== "vuot-chuong-ngai-vat") return;

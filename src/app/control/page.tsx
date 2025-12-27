@@ -58,7 +58,9 @@ export default function ControlPage() {
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastToastRoundRef = useRef<RoundType | null>(null);
   const [showRound2ConfirmModal, setShowRound2ConfirmModal] = useState(false);
+  const [showRound3ConfirmModal, setShowRound3ConfirmModal] = useState(false);
   const [round2State, setRound2State] = useState<any>(null);
+  const [round3State, setRound3State] = useState<any>(null);
 
   const {
     currentRound,
@@ -123,6 +125,27 @@ export default function ControlPage() {
     }
   }, [currentRound]);
 
+  // Load round3 state khi ở vòng 3
+  useEffect(() => {
+    if (currentRound === "tang-toc") {
+      const loadRound3State = async () => {
+        try {
+          const res = await fetch("/api/round3/state");
+          const data = await res.json();
+          setRound3State(data);
+        } catch (error) {
+          console.error("Error loading round3 state:", error);
+        }
+      };
+      loadRound3State();
+      // Poll state mỗi 2 giây để sync
+      const interval = setInterval(loadRound3State, 2000);
+      return () => clearInterval(interval);
+    } else {
+      setRound3State(null);
+    }
+  }, [currentRound]);
+
   // Listen for questions updated event from questions management page
   useEffect(() => {
     const handleQuestionsUpdated = (event: CustomEvent) => {
@@ -156,6 +179,10 @@ export default function ControlPage() {
         // Kiểm tra round2State.config.questions cho vòng 2
         hasQuestions = round2State?.config?.questions?.length > 0 && 
           round2State.config.questions.some((q: any) => q.questionText && q.questionText.trim() !== "");
+      } else if (currentRound === "tang-toc") {
+        // Kiểm tra round3State.config.questions cho vòng 3
+        hasQuestions = round3State?.config?.questions?.length > 0 && 
+          round3State.config.questions.some((q: any) => q.questionText && q.questionText.trim() !== "");
       } else {
         hasQuestions = questions[currentRound]?.length > 0;
       }
@@ -304,6 +331,9 @@ export default function ControlPage() {
                       if (round === "vuot-chuong-ngai-vat" && currentRound !== "vuot-chuong-ngai-vat") {
                         // Hiển thị modal xác nhận khi chuyển sang vòng 2
                         setShowRound2ConfirmModal(true);
+                      } else if (round === "tang-toc" && currentRound !== "tang-toc") {
+                        // Hiển thị modal xác nhận khi chuyển sang vòng 3
+                        setShowRound3ConfirmModal(true);
                       } else {
                         setRound(round);
                       }
@@ -660,6 +690,353 @@ export default function ControlPage() {
                       })()}
                     </div>
                   </div>
+                )}
+              </div>
+            ) : currentRound === "tang-toc" ? (
+              <div className="bg-gray-800 rounded-lg p-4 space-y-4 border border-gray-700">
+                <h2 className="text-xl font-bold mb-4 text-white">Vòng 3: Tăng tốc vận hành</h2>
+                
+                {!round3State?.config ? (
+                  <div className="text-gray-400 text-center py-8">
+                    Chưa có config. Vui lòng tạo config ở trang Quản lý câu hỏi.
+                  </div>
+                ) : (
+                  <>
+                    {/* Chọn câu hỏi */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2 text-white">Chọn câu hỏi</h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        {round3State.config.questions.map((q: any) => (
+                          <button
+                            key={q.id}
+                            onClick={async () => {
+                              try {
+                                const res = await fetch("/api/round3/state", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    action: "setGameState",
+                                    data: {
+                                      status: "idle",
+                                      activeQuestionId: q.id,
+                                      currentQuestionIndex: q.order - 1,
+                                    },
+                                  }),
+                                });
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setRound3State(data.state);
+                                }
+                              } catch (error) {
+                                console.error("Error selecting question:", error);
+                              }
+                            }}
+                            className={`p-3 rounded-lg font-semibold transition-all border-2 ${
+                              round3State.gameState?.activeQuestionId === q.id
+                                ? "bg-neon-blue text-white border-neon-blue shadow-lg shadow-neon-blue/50"
+                                : "bg-gray-700 text-gray-200 hover:bg-gray-600 border-gray-600"
+                            }`}
+                          >
+                            <div className="text-sm font-bold">Câu {q.order}</div>
+                            <div className="text-xs mt-1 opacity-80">
+                              {q.questionType === "suy-luan" ? "Suy luận" : 
+                               q.questionType === "doan-bang" ? "Đoạn băng" : "Sắp xếp"}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Điều khiển câu hỏi */}
+                    {round3State.gameState?.activeQuestionId && (
+                      <div className="space-y-2">
+                        {round3State.gameState.status === "idle" && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch("/api/round3/state", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    action: "setGameState",
+                                    data: {
+                                      status: "question_open",
+                                      timeLeft: 30,
+                                    },
+                                  }),
+                                });
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setRound3State(data.state);
+                                }
+                              } catch (error) {
+                                console.error("Error opening question:", error);
+                              }
+                            }}
+                            className="w-full p-3 bg-neon-blue text-white rounded-lg font-semibold hover:bg-neon-blue/90 flex items-center justify-center gap-2 border border-neon-blue shadow-md"
+                          >
+                            Mở câu hỏi (30 giây)
+                          </button>
+                        )}
+
+                        {round3State.gameState.status === "question_open" && (
+                          <>
+                            <div className="p-3 bg-gray-700 rounded-lg border border-gray-600">
+                              <div className="text-sm text-gray-400 mb-1">Thời gian còn lại:</div>
+                              <div className="text-white font-bold text-2xl">
+                                {round3State.gameState.timeLeft}s
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={async () => {
+                                try {
+                                  // Tính điểm cho các đội trả lời đúng
+                                  const res = await fetch("/api/round3/state", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      action: "calculatePoints",
+                                    }),
+                                  });
+                                  if (res.ok) {
+                                    const data = await res.json();
+                                    setRound3State(data.state);
+                                  } else {
+                                    const errorData = await res.json();
+                                    alert(errorData.error || "Lỗi khi tính điểm");
+                                  }
+                                } catch (error) {
+                                  console.error("Error calculating points:", error);
+                                  alert("Lỗi khi tính điểm");
+                                }
+                              }}
+                              disabled={
+                                round3State.gameState.teamAnswers?.some(
+                                  (ta: any) => ta.pointsAwarded > 0
+                                ) || false
+                              }
+                              className="w-full p-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-600"
+                            >
+                              {round3State.gameState.teamAnswers?.some(
+                                (ta: any) => ta.pointsAwarded > 0
+                              ) ? (
+                                "✓ Đã tính điểm"
+                              ) : (
+                                "Tính điểm (40-30-20-10)"
+                              )}
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch("/api/round3/state", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      action: "setGameState",
+                                      data: {
+                                        status: "question_closed",
+                                      },
+                                    }),
+                                  });
+                                  if (res.ok) {
+                                    const data = await res.json();
+                                    setRound3State(data.state);
+                                  }
+                                } catch (error) {
+                                    console.error("Error closing question:", error);
+                                  }
+                                }}
+                              className="w-full p-3 bg-yellow-600 text-white rounded-lg font-semibold hover:bg-yellow-700 flex items-center justify-center gap-2"
+                            >
+                              Đóng câu hỏi
+                            </button>
+                          </>
+                        )}
+
+                        {round3State.gameState.status === "question_closed" && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch("/api/round3/state", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    action: "nextQuestion",
+                                  }),
+                                });
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setRound3State(data.state);
+                                }
+                              } catch (error) {
+                                console.error("Error moving to next question:", error);
+                              }
+                            }}
+                            className="w-full p-3 bg-neon-purple text-white rounded-lg font-semibold hover:bg-neon-purple/90 flex items-center justify-center gap-2"
+                          >
+                            Câu hỏi tiếp theo
+                          </button>
+                        )}
+
+                        {round3State.gameState.status === "round_finished" && (
+                          <div className="p-3 bg-green-900/30 border border-green-600 rounded-lg text-center">
+                            <div className="text-green-400 font-bold text-lg">
+                              🎉 Vòng thi đã kết thúc!
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Hiển thị câu hỏi đang mở */}
+                    {round3State.gameState?.status === "question_open" && round3State.gameState?.activeQuestionId && (
+                      <div className="mt-4 p-3 bg-gray-700 rounded-lg border border-gray-600">
+                        <div className="text-sm text-gray-400 mb-1">Câu hỏi đang mở:</div>
+                        <div className="text-white font-medium">
+                          {round3State.config.questions.find(
+                            (q: any) => q.id === round3State.gameState.activeQuestionId
+                          )?.questionText || "Đang tải..."}
+                        </div>
+                        <div className="text-sm text-gray-400 mt-2">
+                          Thời gian: {round3State.gameState.timeLeft}s
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Duyệt câu trả lời của các đội */}
+                    {round3State.gameState?.status === "question_open" && round3State.gameState?.activeQuestionId && (
+                      <div className="bg-gray-700 rounded-lg p-4 border border-gray-600 mt-4">
+                        <h3 className="text-lg font-bold mb-3 text-white">Duyệt câu trả lời</h3>
+                        <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                          {(() => {
+                            const questionStartTime = round3State.gameState.questionStartTime;
+                            
+                            // Sắp xếp tất cả đáp án theo thời gian submit (nhanh nhất trước) để tính thứ hạng
+                            const allAnswersSorted = [...(round3State.gameState.teamAnswers || [])]
+                              .filter((ta: any) => ta.submittedAt)
+                              .sort((a: any, b: any) => a.submittedAt - b.submittedAt);
+                            
+                            const teamsWithAnswers = round3State.gameState.teamAnswers?.map((ta: any) => {
+                              const team = round3State.teams.find((t: any) => t.id === ta.teamId);
+                              // Tính thời gian từ khi mở câu hỏi đến khi submit (millisecond)
+                              const submitTime = questionStartTime 
+                                ? ((ta.submittedAt - questionStartTime) / 1000).toFixed(3)
+                                : null;
+                              // Tính thứ hạng (1-based)
+                              const rank = allAnswersSorted.findIndex((a: any) => a.teamId === ta.teamId && a.submittedAt === ta.submittedAt) + 1;
+                              return {
+                                teamId: ta.teamId,
+                                teamName: ta.teamName || team?.name || `Đội ${ta.teamId}`,
+                                answer: ta,
+                                submitTime: submitTime,
+                                submittedAt: ta.submittedAt,
+                                rank: rank > 0 ? rank : null,
+                              };
+                            }) || [];
+                            
+                            // Sắp xếp các đội đã submit theo thời gian (nhanh nhất trước)
+                            teamsWithAnswers.sort((a: any, b: any) => {
+                              if (!a.submittedAt || !b.submittedAt) return 0;
+                              return a.submittedAt - b.submittedAt;
+                            });
+                            
+                            const teamsWithoutAnswers = round3State.teams.filter((team: any) => 
+                              !round3State.gameState.teamAnswers?.some((ta: any) => ta.teamId === team.id)
+                            );
+                            
+                            return [...teamsWithAnswers, ...teamsWithoutAnswers.map((team: any) => ({
+                              teamId: team.id,
+                              teamName: team.name,
+                              answer: null,
+                              submitTime: null,
+                            }))].map((item) => {
+                              const teamAnswer = item.answer;
+                              return (
+                                <div
+                                  key={item.teamId}
+                                  className={`p-3 rounded-lg border-2 transition-all ${
+                                    teamAnswer?.isCorrect === true
+                                      ? "bg-green-900/30 border-green-600"
+                                      : teamAnswer?.isCorrect === false
+                                      ? "bg-red-900/30 border-red-600"
+                                      : teamAnswer
+                                      ? "bg-yellow-900/30 border-yellow-600"
+                                      : "bg-gray-700/50 border-gray-600"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between mb-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-white">{item.teamName}</span>
+                                      {teamAnswer && (
+                                        <span className="px-2 py-0.5 bg-green-500/20 border border-green-500/50 rounded text-green-400 text-xs font-semibold">
+                                          ✓ Đã xong
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {teamAnswer?.isCorrect === true && (
+                                        <span className="text-green-400 text-sm font-semibold">
+                                          ✓ Đúng {teamAnswer.pointsAwarded > 0 ? `(+${teamAnswer.pointsAwarded})` : ""}
+                                        </span>
+                                      )}
+                                      {teamAnswer?.isCorrect === false && (
+                                        <span className="text-red-400 text-sm font-semibold">✗ Sai</span>
+                                      )}
+                                      {teamAnswer && teamAnswer.isCorrect === null && (
+                                        <span className="text-yellow-400 text-sm font-semibold">⏳ Chờ chấm</span>
+                                      )}
+                                      {!teamAnswer && (
+                                        <span className="text-gray-400 text-sm">Chưa gửi</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {teamAnswer ? (
+                                    <div className="space-y-1">
+                                      <div className="text-white text-sm">
+                                        Đáp án: <span className="font-medium">{teamAnswer.answer || "(Trống)"}</span>
+                                      </div>
+                                      {item.submitTime !== null && (
+                                        <div className="text-neon-blue text-xs font-mono">
+                                          ⏱️ Thời gian: {item.submitTime}s
+                                          {item.rank !== null && (
+                                            <span className="ml-2 text-yellow-400 font-semibold">
+                                              (Thứ {item.rank})
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="text-gray-400 text-sm mt-1">Chưa có đáp án</div>
+                                  )}
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Bảng điểm */}
+                    <div className="bg-gray-700 rounded-lg p-4 border border-gray-600 mt-4">
+                      <h3 className="text-lg font-bold mb-3 text-white">Bảng điểm</h3>
+                      <div className="space-y-2">
+                        {round3State.teams
+                          .sort((a: any, b: any) => b.score - a.score)
+                          .map((team: any) => (
+                            <div
+                              key={team.id}
+                              className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-600"
+                            >
+                              <span className="text-white font-medium">{team.name}</span>
+                              <span className="text-neon-blue font-bold text-lg">{team.score}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             ) : currentRound === "khoi-dong" ? (
@@ -1199,6 +1576,50 @@ export default function ControlPage() {
                   setShowRound2ConfirmModal(false);
                   setToast({
                     message: "Đã chuyển sang Vòng 2: Vượt chướng ngại vật",
+                    type: "success",
+                  });
+                }}
+                className="px-6 py-2 bg-neon-blue hover:bg-neon-blue/80 text-white font-semibold rounded-lg transition-colors"
+              >
+                Xác nhận
+              </button>
+            </div>
+          </motion.div>
+          </div>
+        )}
+
+        {showRound3ConfirmModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-gray-800 rounded-xl p-6 border-2 border-neon-blue max-w-md w-full shadow-2xl"
+            >
+            <h2 className="text-2xl font-bold text-white mb-4">
+              Xác nhận chuyển sang Vòng 3
+            </h2>
+            <p className="text-gray-300 mb-6">
+              Bạn có chắc chắn đã hoàn thành:
+              <br />• Vòng 1: Khơi nguồn năng lượng
+              <br />• Vòng 2: Hành trình giọt dầu
+              <br />
+              <br />
+              Khi xác nhận, màn hình của tất cả các đội thi sẽ tự động chuyển sang Vòng 3: Tăng tốc vận hành.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowRound3ConfirmModal(false)}
+                className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  setRound("tang-toc");
+                  setShowRound3ConfirmModal(false);
+                  setToast({
+                    message: "Đã chuyển sang Vòng 3: Tăng tốc vận hành",
                     type: "success",
                   });
                 }}

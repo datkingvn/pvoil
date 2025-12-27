@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, Plus, Edit2, Trash2, Save, X } from "lucide-react";
+import { ArrowLeft, Plus, Edit2, Trash2, Save, X, Video, Upload, Loader2, Trash } from "lucide-react";
 import { Toast } from "@/components/Toast";
 import { RoundType } from "@/lib/types";
 import { roundNames } from "@/lib/questions";
@@ -14,6 +14,7 @@ import {
   countAnswerWords,
 } from "@/lib/round2/helpers";
 import { Round2Config, Round2Question } from "@/lib/round2/types";
+import { Round3Config, Round3Question } from "@/lib/round3/types";
 
 interface Question {
   id: string;
@@ -61,6 +62,7 @@ export default function RoundQuestionsPage() {
 
   const isKhoiDong = round === "khoi-dong";
   const isVuotChuongNgaiVat = round === "vuot-chuong-ngai-vat";
+  const isTangToc = round === "tang-toc";
 
   // Round2 state
   const [imageUrl, setImageUrl] = useState("");
@@ -75,6 +77,16 @@ export default function RoundQuestionsPage() {
   const [uploading, setUploading] = useState(false);
   const [savingRound2, setSavingRound2] = useState(false);
 
+  // Round3 state
+  const [round3Questions, setRound3Questions] = useState<Round3Question[]>([
+    { id: 1, questionText: "", answerText: "", questionType: "suy-luan", order: 1, steps: [] },
+    { id: 2, questionText: "", answerText: "", questionType: "suy-luan", order: 2, steps: [] },
+    { id: 3, questionText: "", answerText: "", questionType: "suy-luan", order: 3, steps: [] },
+    { id: 4, questionText: "", answerText: "", questionType: "suy-luan", order: 4, steps: [] },
+  ]);
+  const [savingRound3, setSavingRound3] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState<Record<number, boolean>>({});
+
   useEffect(() => {
     if (!round || !["khoi-dong", "vuot-chuong-ngai-vat", "tang-toc", "ve-dich"].includes(round)) {
       router.push("/control/questions");
@@ -83,6 +95,8 @@ export default function RoundQuestionsPage() {
     
     if (isVuotChuongNgaiVat) {
       loadRound2Config();
+    } else if (isTangToc) {
+      loadRound3Config();
     } else {
       loadQuestions();
     }
@@ -109,6 +123,30 @@ export default function RoundQuestionsPage() {
       }
     } catch (error) {
       console.error("Error loading round2 config:", error);
+      showToast("Đã có lỗi xảy ra khi tải config", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadRound3Config = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/round3/state");
+      const data = await res.json();
+      if (res.ok && data.config) {
+        setRound3Questions(data.config.questions);
+      }
+      // Load teams nếu chưa có
+      if (!data.teams || data.teams.length === 0) {
+        fetch("/api/round3/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "loadTeams" }),
+        }).catch(console.error);
+      }
+    } catch (error) {
+      console.error("Error loading round3 config:", error);
       showToast("Đã có lỗi xảy ra khi tải config", "error");
     } finally {
       setLoading(false);
@@ -308,6 +346,73 @@ export default function RoundQuestionsPage() {
     );
   };
 
+  const updateRound3Question = (id: 1 | 2 | 3 | 4, field: "questionText" | "answerText" | "questionType" | "videoUrl", value: string) => {
+    setRound3Questions((prev) =>
+      prev.map((q) => {
+        if (q.id === id) {
+          const updated = { ...q, [field]: value };
+          // Nếu đổi loại câu hỏi, reset steps nếu không phải sap-xep
+          if (field === "questionType" && value !== "sap-xep") {
+            updated.steps = [];
+          }
+          // Nếu đổi sang sap-xep và chưa có steps, khởi tạo
+          if (field === "questionType" && value === "sap-xep" && (!updated.steps || updated.steps.length === 0)) {
+            updated.steps = [
+              { label: "A", text: "" },
+              { label: "B", text: "" },
+              { label: "C", text: "" },
+              { label: "D", text: "" },
+            ];
+          }
+          return updated;
+        }
+        return q;
+      })
+    );
+  };
+
+  const updateRound3QuestionStep = (questionId: 1 | 2 | 3 | 4, stepIndex: number, field: "label" | "text", value: string) => {
+    setRound3Questions((prev) =>
+      prev.map((q) => {
+        if (q.id === questionId && q.steps) {
+          const newSteps = [...q.steps];
+          newSteps[stepIndex] = { ...newSteps[stepIndex], [field]: value };
+          return { ...q, steps: newSteps };
+        }
+        return q;
+      })
+    );
+  };
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>, questionId: number) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingVideo((prev) => ({ ...prev, [questionId]: true }));
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/round3/upload-video", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        updateRound3Question(questionId, "videoUrl", data.url);
+        showToast("Upload video thành công", "success");
+      } else {
+        showToast(data.error || "Lỗi khi upload video", "error");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      showToast("Lỗi khi upload video", "error");
+    } finally {
+      setUploadingVideo((prev) => ({ ...prev, [questionId]: false }));
+    }
+  };
+
   const handleSaveRound2 = async () => {
     if (!imageUrl) {
       showToast("Vui lòng upload ảnh", "error");
@@ -361,6 +466,46 @@ export default function RoundQuestionsPage() {
       showToast("Lỗi khi lưu config", "error");
     } finally {
       setSavingRound2(false);
+    }
+  };
+
+  const handleSaveRound3 = async () => {
+    // Validate
+    if (round3Questions.some((q) => !q.questionText.trim() || !q.answerText.trim())) {
+      showToast("Vui lòng điền đầy đủ câu hỏi và đáp án cho tất cả 4 câu", "error");
+      return;
+    }
+
+    setSavingRound3(true);
+    try {
+      const config: Round3Config = {
+        questions: round3Questions,
+      };
+
+      const res = await fetch("/api/round3/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "setConfig",
+          data: config,
+        }),
+      });
+
+      if (res.ok) {
+        showToast("Đã lưu config thành công!", "success");
+        // Dispatch event để control page reload
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("questions-updated", { detail: { round } }));
+        }
+      } else {
+        const errorData = await res.json();
+        showToast(errorData.error || "Lỗi khi lưu config", "error");
+      }
+    } catch (error) {
+      console.error("Error saving round3 config:", error);
+      showToast("Đã có lỗi xảy ra khi lưu config", "error");
+    } finally {
+      setSavingRound3(false);
     }
   };
 
@@ -514,6 +659,245 @@ export default function RoundQuestionsPage() {
             onClose={() => setToast(null)}
           />
         )}
+      </div>
+    );
+  }
+
+  // Render Round3 admin UI
+  if (isTangToc) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+        <div className="max-w-6xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-4 mb-6">
+            <Link
+              href="/control/questions"
+              className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </Link>
+            <div>
+              <h1 className="text-3xl font-bold text-neon-blue">
+                Quản lý câu hỏi - {roundNames[round]}
+              </h1>
+              <p className="text-sm text-gray-400 mt-1">
+                Vòng 3: Tăng tốc vận hành - Tạo 4 câu hỏi (30 giây mỗi câu)
+              </p>
+            </div>
+          </div>
+
+          {/* Questions */}
+          <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
+            <h2 className="text-xl font-bold text-white mb-4">4 Câu hỏi</h2>
+            <div className="space-y-6">
+              {round3Questions.map((q) => (
+                <div key={q.id} className="bg-slate-900/50 rounded-lg p-4 border border-slate-600">
+                  <h3 className="text-lg font-semibold text-neon-blue mb-3">
+                    Câu {q.order}
+                  </h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">Loại câu hỏi:</label>
+                      <select
+                        value={q.questionType}
+                        onChange={(e) => updateRound3Question(q.id, "questionType", e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-neon-blue"
+                      >
+                        <option value="suy-luan">Câu hỏi suy luận</option>
+                        <option value="doan-bang">Câu hỏi đoạn băng</option>
+                        <option value="sap-xep">Câu hỏi sắp xếp</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">Câu hỏi:</label>
+                      <textarea
+                        value={q.questionText}
+                        onChange={(e) => updateRound3Question(q.id, "questionText", e.target.value)}
+                        placeholder="Nhập câu hỏi..."
+                        rows={3}
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neon-blue"
+                      />
+                    </div>
+                    {q.questionType !== "sap-xep" && (
+                      <div>
+                        <label className="block text-sm text-gray-300 mb-1">Đáp án:</label>
+                        <input
+                          type="text"
+                          value={q.answerText}
+                          onChange={(e) => updateRound3Question(q.id, "answerText", e.target.value)}
+                          placeholder="Nhập đáp án chính xác (chú ý chính tả)..."
+                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neon-blue"
+                        />
+                        <div className="text-gray-400 text-xs mt-1">
+                          💡 Câu trả lời phải chính xác về chính tả. Câu trả lời tương đồng cũng được chấp nhận.
+                        </div>
+                      </div>
+                    )}
+                    {q.questionType === "doan-bang" && (
+                      <div className="mt-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <label className="flex items-center gap-2 text-sm font-semibold text-neon-blue mb-3">
+                          <Video className="w-4 h-4" />
+                          Video đoạn băng
+                        </label>
+                        <div className="space-y-3">
+                          {!q.videoUrl ? (
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept="video/mp4,video/webm,video/quicktime,video/x-msvideo"
+                                onChange={(e) => handleVideoUpload(e, q.id)}
+                                disabled={uploadingVideo[q.id]}
+                                id={`video-upload-${q.id}`}
+                                className="hidden"
+                              />
+                              <label
+                                htmlFor={`video-upload-${q.id}`}
+                                className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-all ${
+                                  uploadingVideo[q.id]
+                                    ? "border-yellow-500 bg-yellow-500/10"
+                                    : "border-neon-blue/50 bg-slate-900/50 hover:border-neon-blue hover:bg-slate-900/70"
+                                }`}
+                              >
+                                {uploadingVideo[q.id] ? (
+                                  <div className="flex flex-col items-center gap-2">
+                                    <Loader2 className="w-8 h-8 text-yellow-400 animate-spin" />
+                                    <span className="text-sm text-yellow-400 font-medium">
+                                      Đang upload video...
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center gap-2">
+                                    <div className="p-3 bg-neon-blue/20 rounded-full">
+                                      <Upload className="w-6 h-6 text-neon-blue" />
+                                    </div>
+                                    <div className="text-center">
+                                      <span className="text-sm font-medium text-white">
+                                        Nhấn để chọn video
+                                      </span>
+                                      <p className="text-xs text-gray-400 mt-1">
+                                        MP4, WebM, MOV, AVI (tối đa 100MB)
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                              </label>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              <div className="relative group">
+                                <video
+                                  src={q.videoUrl}
+                                  controls
+                                  className="w-full rounded-lg border-2 border-neon-blue/30 shadow-lg shadow-neon-blue/10"
+                                  style={{ maxHeight: "400px" }}
+                                >
+                                  Trình duyệt của bạn không hỗ trợ video.
+                                </video>
+                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateRound3Question(q.id, "videoUrl", "")}
+                                    className="p-2 bg-red-600/90 hover:bg-red-600 text-white rounded-lg shadow-lg transition-colors flex items-center gap-1"
+                                    title="Xóa video"
+                                  >
+                                    <Trash className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between p-2 bg-green-900/20 border border-green-500/30 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                                  <span className="text-xs text-green-400 font-medium">
+                                    Video đã được tải lên
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => updateRound3Question(q.id, "videoUrl", "")}
+                                  className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors"
+                                >
+                                  <Trash className="w-3 h-3" />
+                                  Xóa
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {q.questionType === "sap-xep" && (
+                      <div className="mt-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <label className="flex items-center gap-2 text-sm font-semibold text-neon-blue mb-3">
+                          <span>📋</span>
+                          Các bước cần sắp xếp
+                        </label>
+                        <div className="space-y-3">
+                          {q.steps && q.steps.length > 0 ? (
+                            q.steps.map((step, stepIndex) => (
+                              <div key={stepIndex} className="flex items-center gap-3">
+                                <div className="w-10 h-10 flex items-center justify-center bg-neon-blue/20 border border-neon-blue rounded-lg font-bold text-neon-blue flex-shrink-0">
+                                  {step.label}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={step.text}
+                                  onChange={(e) => updateRound3QuestionStep(q.id, stepIndex, "text", e.target.value)}
+                                  placeholder={`Nhập nội dung bước ${step.label}...`}
+                                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neon-blue"
+                                />
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-gray-400 text-sm italic">
+                              Chọn loại "Câu hỏi sắp xếp" để hiển thị các bước
+                            </div>
+                          )}
+                          {q.steps && q.steps.length > 0 && (
+                            <div className="mt-4 pt-4 border-t border-slate-700">
+                              <label className="block text-sm font-semibold text-neon-blue mb-2">
+                                Đáp án (thứ tự đúng):
+                              </label>
+                              <input
+                                type="text"
+                                value={q.answerText}
+                                onChange={(e) => updateRound3Question(q.id, "answerText", e.target.value.toUpperCase().replace(/[^ABCD]/g, ""))}
+                                placeholder="VD: ACDB"
+                                maxLength={4}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neon-blue font-mono text-lg"
+                              />
+                              <div className="text-gray-400 text-xs mt-2">
+                                💡 Nhập thứ tự đúng của các bước (ví dụ: ACDB nghĩa là A → C → D → B)
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-4">
+            <button
+              onClick={handleSaveRound3}
+              disabled={savingRound3}
+              className="px-6 py-3 bg-neon-blue hover:bg-neon-blue/80 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
+            >
+              {savingRound3 ? "Đang lưu..." : "Lưu config"}
+            </button>
+          </div>
+
+          {toast && (
+            <Toast
+              message={toast.message}
+              type={toast.type}
+              onClose={() => setToast(null)}
+            />
+          )}
+        </div>
       </div>
     );
   }

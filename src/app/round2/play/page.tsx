@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { TileGrid } from "@/components/round2/TileGrid";
 import { ObstacleDisplay } from "@/components/round2/ObstacleDisplay";
 import { QuestionPanel } from "@/components/round2/QuestionPanel";
@@ -14,10 +15,17 @@ import {
 } from "@/lib/round2/types";
 import { compareKeyword } from "@/lib/round2/helpers";
 import { useAuth } from "@/hooks/useAuth";
+import { useGameStore } from "@/lib/store";
+import { useBroadcastSync } from "@/hooks/useBroadcastSync";
+import { useGameWebSocket } from "@/hooks/useGameWebSocket";
 import { Bell } from "lucide-react";
 
 export default function Round2PlayPage() {
+  useBroadcastSync(); // Sync với các tab cùng máy
+  useGameWebSocket("stage"); // Sync qua WebSocket với các thiết bị khác
   const { team } = useAuth(); // Lấy thông tin đội đang đăng nhập
+  const router = useRouter();
+  const currentRound = useGameStore((state) => state.currentRound);
   const [state, setState] = useState<Round2State | null>(null);
   const [keywordInput, setKeywordInput] = useState("");
   const [answerInput, setAnswerInput] = useState("");
@@ -53,6 +61,14 @@ export default function Round2PlayPage() {
       }
     }
   }, [team, state?.teams]);
+
+  // Tự động redirect sang trang vòng 3 khi MC chuyển round
+  useEffect(() => {
+    if (team && currentRound === "tang-toc") {
+      // Redirect đến trang vòng 3
+      router.push("/round3/play");
+    }
+  }, [currentRound, team, router]);
 
   // Server đã tự động tính toán timeLeft dựa trên questionStartTime
   // Client chỉ cần hiển thị timeLeft từ server, không cần timer local
