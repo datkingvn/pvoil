@@ -63,6 +63,7 @@ export default function RoundQuestionsPage() {
   const isKhoiDong = round === "khoi-dong";
   const isVuotChuongNgaiVat = round === "vuot-chuong-ngai-vat";
   const isTangToc = round === "tang-toc";
+  const isVeDich = round === "ve-dich";
 
   // Round2 state
   const [imageUrl, setImageUrl] = useState("");
@@ -90,6 +91,12 @@ export default function RoundQuestionsPage() {
   useEffect(() => {
     if (!round || !["khoi-dong", "vuot-chuong-ngai-vat", "tang-toc", "ve-dich"].includes(round)) {
       router.push("/control/questions");
+      return;
+    }
+    
+    // Vòng 4 (ve-dich) được quản lý ở /round4/admin
+    if (isVeDich) {
+      router.push("/round4/admin");
       return;
     }
     

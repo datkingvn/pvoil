@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useMcAuth } from "@/hooks/useMcAuth";
+import { Round4Control } from "@/components/round4/Round4Control";
 
 // Component timer riêng để tránh re-render control page mỗi giây
 const ControlTimer = memo(() => {
@@ -61,6 +62,7 @@ export default function ControlPage() {
   const [showRound3ConfirmModal, setShowRound3ConfirmModal] = useState(false);
   const [round2State, setRound2State] = useState<any>(null);
   const [round3State, setRound3State] = useState<any>(null);
+  const [round4State, setRound4State] = useState<any>(null);
 
   const {
     currentRound,
@@ -146,6 +148,28 @@ export default function ControlPage() {
     }
   }, [currentRound]);
 
+  // Load round4 state khi ở vòng 4
+  useEffect(() => {
+    if (currentRound === "ve-dich") {
+      const loadRound4State = async () => {
+        try {
+          const res = await fetch("/api/round4/state");
+          const data = await res.json();
+          setRound4State(data);
+        } catch (error) {
+          console.error("Error loading round4 state:", error);
+        }
+      };
+      loadRound4State();
+      // Poll state mỗi 2 giây để sync
+      const interval = setInterval(loadRound4State, 2000);
+      return () => clearInterval(interval);
+    } else {
+      setRound4State(null);
+    }
+  }, [currentRound]);
+
+
   // Listen for questions updated event from questions management page
   useEffect(() => {
     const handleQuestionsUpdated = (event: CustomEvent) => {
@@ -195,8 +219,9 @@ export default function ControlPage() {
         }
         
         lastToastRoundRef.current = currentRound;
+        const message = `Chưa có câu hỏi nào cho vòng ${roundNames[currentRound]}. Vui lòng thêm câu hỏi trong trang Quản lý câu hỏi.`;
         setToast({
-          message: `Chưa có câu hỏi nào cho vòng ${roundNames[currentRound]}. Vui lòng thêm câu hỏi trong trang Quản lý câu hỏi.`,
+          message,
           type: "error",
         });
         
@@ -224,7 +249,7 @@ export default function ControlPage() {
         clearTimeout(toastTimeoutRef.current);
       }
     };
-  }, [currentRound, khoiDongPackages, questions, round2State]);
+  }, [currentRound, khoiDongPackages, questions, round2State, round3State]);
 
   // Hotkeys
   useHotkeys("space", (e) => {
@@ -1156,6 +1181,11 @@ export default function ControlPage() {
                   </div>
                 )}
               </div>
+            ) : currentRound === "ve-dich" ? (
+              <Round4Control 
+                round4State={round4State} 
+                onStateUpdate={(state) => setRound4State(state)}
+              />
             ) : (
               currentRound && (
                 <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
